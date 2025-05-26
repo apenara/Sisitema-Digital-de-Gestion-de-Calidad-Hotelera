@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Función helper para verificar autenticación
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función helper para verificar pertenencia al hotel
+    function belongsToHotel(hotelId) {
+      return isAuthenticated() && 
+             request.auth.token.hotelId == hotelId;
+    }
+    
+    // Función helper para verificar roles
+    function hasRole(role) {
+      return isAuthenticated() && 
+             request.auth.token.role == role;
+    }
+    
+    // Reglas para documentos de hotel
+    match /hotels/{hotelId}/{document=**} {
+      allow read, write: if belongsToHotel(hotelId);
+    }
+    
+    // Reglas para usuarios (solo lectura de su propio perfil)
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && 
+                         request.auth.uid == userId;
+    }
+    
+    // Reglas por defecto - denegar todo lo demás
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
