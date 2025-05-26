@@ -5,6 +5,11 @@ export * from './User';
 export * from './Document';
 export * from './NonConformity';
 
+// Nuevos tipos multi-tenant
+export * from './Organization';
+export * from './Subscription';
+export * from './Platform';
+
 // Tipos comunes
 export interface ApiResponse<T> {
   success: boolean;
