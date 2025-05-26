@@ -1,64 +1,24 @@
-// Tipos de usuario y roles
-export interface UserRole {
-  role: 'admin' | 'quality_manager' | 'department_manager' | 'employee';
-  permissions: string[];
-  departmentAccess?: string[];
+// Shared types for QMS+Hotel
+export * from './Auth';
+export * from './Hotel';
+export * from './User';
+export * from './Document';
+export * from './NonConformity';
+
+// Tipos comunes
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
 }
 
-export interface User {
-  uid: string;
-  email: string;
-  displayName: string;
-  hotelId: string;
-  role: UserRole['role'];
-  permissions: string[];
-  departmentAccess?: string[];
-  createdAt: Date;
-  updatedAt: Date;
-  isActive: boolean;
-}
-
-// Tipos para documentos del SGC
-export interface Document {
-  id: string;
-  title: string;
-  description: string;
-  type: 'policy' | 'procedure' | 'form' | 'manual' | 'record';
-  category: string;
-  status: 'draft' | 'review' | 'approved' | 'obsolete';
-  version: string;
-  hotelId: string;
-  createdBy: string;
-  approvedBy?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  approvedAt?: Date;
-  fileUrl?: string;
-  tags: string[];
-}
-
-// Tipos para no conformidades
-export interface NonConformity {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'in_progress' | 'resolved' | 'verified' | 'closed';
-  hotelId: string;
-  reportedBy: string;
-  assignedTo?: string;
-  department: string;
-  location?: string;
-  rootCause?: string;
-  correctiveAction?: string;
-  preventiveAction?: string;
-  dueDate?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  closedAt?: Date;
-  verifiedAt?: Date;
-  attachments?: string[];
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 // Tipos para procesos
@@ -86,22 +46,6 @@ export interface ProcessKPI {
   frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly';
   currentValue?: number;
   lastMeasurement?: Date;
-}
-
-// Tipos para hotel
-export interface Hotel {
-  id: string;
-  name: string;
-  address: string;
-  phone: string;
-  email: string;
-  website?: string;
-  category: string;
-  rooms: number;
-  adminUserId: string;
-  createdAt: Date;
-  updatedAt: Date;
-  isActive: boolean;
 }
 
 // Tipos para gamificación
@@ -153,20 +97,4 @@ export interface AuditFinding {
   correctiveAction?: string;
   dueDate?: Date;
   status: 'open' | 'in_progress' | 'completed' | 'verified';
-}
-
-// Tipos de API responses
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
 }

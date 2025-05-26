@@ -1,34 +1,120 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Función helper para verificar autenticación
+    // Función para verificar autenticación
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Función helper para verificar pertenencia al hotel
+    // Función para verificar si el usuario pertenece al hotel
     function belongsToHotel(hotelId) {
-      return isAuthenticated() && 
-             request.auth.token.hotelId == hotelId;
+      return request.auth != null && request.auth.token.hotelId == hotelId;
     }
     
-    // Función helper para verificar roles
+    // Función para verificar permisos
+    function hasPermission(permission) {
+      return request.auth != null && 
+             request.auth.token.permissions != null &&
+             permission in request.auth.token.permissions;
+    }
+    
+    // Función para verificar rol
     function hasRole(role) {
-      return isAuthenticated() && 
-             request.auth.token.role == role;
+      return request.auth != null && request.auth.token.role == role;
     }
     
-    // Reglas para documentos de hotel
-    match /hotels/{hotelId}/{document=**} {
-      allow read, write: if belongsToHotel(hotelId);
+    // Función para verificar si es admin o el propio usuario
+    function isAdminOrSelf(userId) {
+      return request.auth != null && 
+             (request.auth.token.role == 'admin' || request.auth.uid == userId);
     }
-    
-    // Reglas para usuarios (solo lectura de su propio perfil)
+
+    // Reglas para usuarios
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && 
-                         request.auth.uid == userId;
+      allow read: if isAuthenticated() && 
+                     (isAdminOrSelf(userId) || belongsToHotel(resource.data.hotelId));
+      allow write: if isAuthenticated() && 
+                      (hasPermission('users:manage') || request.auth.uid == userId);
+      allow create: if isAuthenticated() && hasPermission('users:manage');
+      allow delete: if isAuthenticated() && hasPermission('users:manage');
     }
-    
+
+    // Reglas para hoteles y sus subcolecciones
+    match /hotels/{hotelId} {
+      allow read: if isAuthenticated() && belongsToHotel(hotelId);
+      allow write: if isAuthenticated() && 
+                      (hasRole('admin') || hasPermission('settings:manage'));
+      
+      // Documentos del SGC
+      match /documents/{documentId} {
+        allow read: if isAuthenticated() && 
+                       belongsToHotel(hotelId) && 
+                       hasPermission('documents:read');
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        hasPermission('documents:write');
+        allow create: if isAuthenticated() && 
+                         belongsToHotel(hotelId) && 
+                         hasPermission('documents:write');
+        allow delete: if isAuthenticated() && 
+                         belongsToHotel(hotelId) && 
+                         hasPermission('documents:delete');
+      }
+      
+      // No conformidades
+      match /nonConformities/{ncId} {
+        allow read: if isAuthenticated() && 
+                       belongsToHotel(hotelId) && 
+                       hasPermission('nc:view');
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        hasPermission('nc:manage');
+        allow create: if isAuthenticated() && 
+                         belongsToHotel(hotelId) && 
+                         hasPermission('nc:manage');
+      }
+      
+      // Procesos
+      match /processes/{processId} {
+        allow read: if isAuthenticated() && belongsToHotel(hotelId);
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        hasPermission('settings:manage');
+      }
+      
+      // Auditorías
+      match /audits/{auditId} {
+        allow read: if isAuthenticated() && 
+                       belongsToHotel(hotelId) && 
+                       hasPermission('audits:view');
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        hasPermission('audits:manage');
+        allow create: if isAuthenticated() && 
+                         belongsToHotel(hotelId) && 
+                         hasPermission('audits:manage');
+      }
+      
+      // Gamificación
+      match /gamification/{userId} {
+        allow read: if isAuthenticated() && belongsToHotel(hotelId);
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        (isAdminOrSelf(userId) || hasPermission('users:manage'));
+      }
+      
+      // Departamentos
+      match /departments/{departmentId} {
+        allow read: if isAuthenticated() && belongsToHotel(hotelId);
+        allow write: if isAuthenticated() && 
+                        belongsToHotel(hotelId) && 
+                        hasPermission('settings:manage');
+        allow create: if isAuthenticated() && 
+                         belongsToHotel(hotelId) && 
+                         hasPermission('settings:manage');
+      }
+    }
+
     // Reglas por defecto - denegar todo lo demás
     match /{document=**} {
       allow read, write: if false;
