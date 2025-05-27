@@ -14,6 +14,7 @@ class HotelService {
         ...data,
         departments: [],
         isActive: true,
+        status: 'active' as const,
         subscriptionPlan: 'basic' as const,
         subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
         ownerId,
@@ -27,6 +28,31 @@ class HotelService {
             primaryColor: '#006A6B',
             secondaryColor: '#4A6363'
           },
+          branding: {
+            theme: {
+              primaryColor: '#006A6B',
+              secondaryColor: '#4A6363'
+            }
+          },
+          features: {
+            documentsEnabled: true,
+            nonConformitiesEnabled: true,
+            auditsEnabled: true,
+            reportsEnabled: true,
+            analyticsEnabled: true,
+            notificationsEnabled: true
+          },
+          notifications: {
+            emailAlerts: true,
+            pushNotifications: true
+          },
+          quality: {
+            defaultProcesses: [],
+            auditFrequency: 'monthly' as const,
+            complianceStandards: [],
+            qualityObjectives: []
+          },
+          integrations: {},
           ...data.settings
         }
       };
@@ -252,7 +278,7 @@ class HotelService {
       const hotel = await this.getHotelById(hotelId);
       if (!hotel) return false;
       
-      return hotel.subscriptionExpiry > new Date();
+      return hotel.subscriptionId ? true : false; // TODO: verificar subscripción real
     } catch (error) {
       console.error('Error checking subscription:', error);
       return false;

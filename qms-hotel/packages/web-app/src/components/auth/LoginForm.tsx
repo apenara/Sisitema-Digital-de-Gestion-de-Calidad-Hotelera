@@ -40,13 +40,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   onForgotPassword 
 }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, error, clearError } = useAuth();
+  const { login, error, clearError, isLoading } = useAuth();
 
   const {
     control,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     getValues
   } = useForm<LoginCredentials>({
     resolver: yupResolver(schema),
@@ -58,13 +57,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   const onSubmit = async (data: LoginCredentials) => {
     try {
-      setIsSubmitting(true);
       clearError();
       await login(data);
     } catch (error) {
       // El error se maneja en el contexto de autenticación
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error en login:', error);
     }
   };
 
@@ -94,7 +91,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           </Alert>
         )}
 
-        <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+        <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
           <Controller
             name="email"
             control={control}
@@ -109,6 +106,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                 margin="normal"
                 autoComplete="email"
                 autoFocus
+                disabled={isLoading || isSubmitting}
               />
             )}
           />
@@ -126,6 +124,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                 helperText={errors.password?.message}
                 margin="normal"
                 autoComplete="current-password"
+                disabled={isLoading || isSubmitting}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -133,6 +132,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                         onClick={() => setShowPassword(!showPassword)}
                         edge="end"
                         aria-label="toggle password visibility"
+                        disabled={isLoading || isSubmitting}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -148,23 +148,24 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             fullWidth
             variant="contained"
             size="large"
-            disabled={isSubmitting}
+            disabled={isLoading || isSubmitting}
             sx={{ mt: 3, mb: 2 }}
           >
-            {isSubmitting ? (
+            {isLoading || isSubmitting ? (
               <CircularProgress size={24} color="inherit" />
             ) : (
               'Iniciar Sesión'
             )}
           </Button>
 
-          <Box sx={{ textAlign: 'center' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Link
               component="button"
               variant="body2"
               type="button"
               onClick={handleForgotPassword}
               sx={{ mr: 2 }}
+              disabled={isLoading || isSubmitting}
             >
               ¿Olvidaste tu contraseña?
             </Link>
@@ -175,6 +176,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                 variant="body2"
                 type="button"
                 onClick={onToggleMode}
+                disabled={isLoading || isSubmitting}
               >
                 ¿No tienes cuenta? Regístrate
               </Link>

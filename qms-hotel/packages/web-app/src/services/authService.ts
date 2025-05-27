@@ -24,8 +24,12 @@ class AuthService {
         credentials.password
       );
       
-      // Actualizar última fecha de login
-      await userService.updateLastLogin(userCredential.user.uid);
+      // Actualizar última fecha de login (temporalmente deshabilitado durante bootstrap)
+      try {
+        await userService.updateLastLogin(userCredential.user.uid);
+      } catch (error) {
+        console.warn('Could not update last login time, but login successful:', error);
+      }
       
       return userCredential.user;
     } catch (error: any) {

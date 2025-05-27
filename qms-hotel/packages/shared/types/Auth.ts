@@ -1,4 +1,4 @@
-import { User, UserRole } from './User';
+import type { User, UserRole } from './User';
 
 // Generic Firebase User type (to avoid dependency on firebase/auth)
 export interface FirebaseUser {

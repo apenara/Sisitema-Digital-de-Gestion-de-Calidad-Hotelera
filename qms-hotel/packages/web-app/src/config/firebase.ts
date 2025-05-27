@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
@@ -22,6 +22,12 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);
+
+// Configurar persistencia de autenticación
+setPersistence(auth, browserLocalPersistence)
+  .catch((error) => {
+    console.error('Error configurando persistencia de autenticación:', error);
+  });
 
 // Connect to emulators in development
 if (import.meta.env.MODE === 'development') {

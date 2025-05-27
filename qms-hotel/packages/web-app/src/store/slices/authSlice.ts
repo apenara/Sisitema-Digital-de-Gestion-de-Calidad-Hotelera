@@ -7,7 +7,7 @@ import { userService } from '../../services/userService';
 const initialState: AuthState = {
   user: null,
   firebaseUser: null,
-  isLoading: false,
+  isLoading: true,
   isAuthenticated: false,
   error: null,
 };
@@ -54,6 +54,7 @@ export const logoutAsync = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       await authService.logout();
+      return null;
     } catch (error: any) {
       return rejectWithValue(error.message || 'Error al cerrar sesión');
     }

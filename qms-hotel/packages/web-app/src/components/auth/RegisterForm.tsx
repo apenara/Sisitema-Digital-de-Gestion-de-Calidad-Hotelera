@@ -53,7 +53,7 @@ const schema = yup.object({
     .required('Nombre es requerido'),
   role: yup
     .string()
-    .oneOf(['admin', 'quality_manager', 'department_manager', 'employee'])
+    .oneOf(['super_admin', 'chain_admin', 'hotel_admin', 'quality_manager', 'department_manager', 'employee'])
     .required('Rol es requerido'),
   hotelId: yup
     .string()
@@ -86,7 +86,7 @@ const roleOptions: Array<{ value: UserRole; label: string; description: string }
     description: 'Gestión completa del sistema de calidad'
   },
   {
-    value: 'admin',
+    value: 'hotel_admin',
     label: 'Administrador',
     description: 'Acceso completo al sistema'
   }

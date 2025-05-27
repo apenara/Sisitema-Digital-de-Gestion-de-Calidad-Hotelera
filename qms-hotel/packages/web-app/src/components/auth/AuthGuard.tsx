@@ -82,7 +82,9 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
       employee: 1,
       department_manager: 2,
       quality_manager: 3,
-      admin: 4
+      hotel_admin: 4,
+      chain_admin: 5,
+      super_admin: 6
     };
 
     const userRoleLevel = roleHierarchy[user.role];

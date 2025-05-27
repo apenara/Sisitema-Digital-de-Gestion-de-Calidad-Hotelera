@@ -38,6 +38,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const userData = await userService.getUserById(firebaseUser.uid);
           
           if (userData) {
+            // Verificar si el usuario está activo
+            if (!userData.isActive) {
+              await authService.logout();
+              setAuthState({
+                user: null,
+                firebaseUser: null,
+                isLoading: false,
+                isAuthenticated: false,
+                error: 'Tu cuenta ha sido desactivada'
+              });
+              return;
+            }
+
             setAuthState({
               user: userData,
               firebaseUser,
@@ -58,6 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         } catch (error) {
           console.error('Error loading user data:', error);
+          await authService.logout();
           setAuthState({
             user: null,
             firebaseUser: null,
@@ -86,6 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authService.login(credentials);
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
+      console.error('Login error:', error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
@@ -101,6 +116,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authService.register(credentials);
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
+      console.error('Register error:', error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
@@ -116,6 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authService.logout();
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
+      console.error('Logout error:', error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
@@ -127,8 +144,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const resetPassword = async (email: string): Promise<void> => {
     try {
+      setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
       await authService.resetPassword(email);
+      setAuthState(prev => ({ ...prev, isLoading: false }));
     } catch (error: any) {
+      console.error('Reset password error:', error);
+      setAuthState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error.message || 'Error al enviar email de recuperación'
+      }));
       throw error;
     }
   };
@@ -152,6 +177,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }));
       }
     } catch (error: any) {
+      console.error('Update profile error:', error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
@@ -161,16 +187,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const clearError = (): void => {
+  const clearError = () => {
     setAuthState(prev => ({ ...prev, error: null }));
   };
 
-  const contextValue: AuthContextType = {
-    user: authState.user,
-    firebaseUser: authState.firebaseUser,
-    isLoading: authState.isLoading,
-    isAuthenticated: authState.isAuthenticated,
-    error: authState.error,
+  const value: AuthContextType = {
+    ...authState,
     login,
     register,
     logout,
@@ -180,16 +202,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

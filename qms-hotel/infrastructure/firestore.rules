@@ -1,121 +1,173 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ============================================
+    // FUNCIONES DE AUTENTICACIÓN Y PERMISOS
+    // ============================================
+    
     // Función para verificar autenticación
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Función para verificar si el usuario pertenece al hotel
-    function belongsToHotel(hotelId) {
-      return request.auth != null && request.auth.token.hotelId == hotelId;
+    // Función para verificar si es super admin
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.role == 'super_admin' || 
+              exists(/databases/$(database)/documents/platform_users/$(request.auth.uid)));
     }
     
-    // Función para verificar permisos
+    // Función para verificar si es chain admin
+    function isChainAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'chain_admin';
+    }
+    
+    // Función para verificar si es hotel admin
+    function isHotelAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'hotel_admin';
+    }
+    
+    // Función para verificar si el usuario pertenece al hotel
+    function belongsToHotel(hotelId) {
+      return isAuthenticated() &&
+             (request.auth.token.context.hotelId == hotelId ||
+              request.auth.token.hotelId == hotelId);
+    }
+    
+    // Función para verificar si el usuario pertenece a la organización
+    function belongsToOrganization(organizationId) {
+      return isAuthenticated() &&
+             request.auth.token.context.organizationId == organizationId;
+    }
+    
+    // Función para verificar permisos específicos
     function hasPermission(permission) {
-      return request.auth != null && 
+      return isAuthenticated() &&
              request.auth.token.permissions != null &&
              permission in request.auth.token.permissions;
     }
     
-    // Función para verificar rol
+    // Función para verificar rol específico
     function hasRole(role) {
-      return request.auth != null && request.auth.token.role == role;
+      return isAuthenticated() && request.auth.token.role == role;
     }
     
     // Función para verificar si es admin o el propio usuario
     function isAdminOrSelf(userId) {
-      return request.auth != null && 
-             (request.auth.token.role == 'admin' || request.auth.uid == userId);
+      return isAuthenticated() &&
+             (isSuperAdmin() || isChainAdmin() || isHotelAdmin() || request.auth.uid == userId);
     }
-
-    // Reglas para usuarios
-    match /users/{userId} {
+    
+    // Función para verificar acceso jerárquico a hotel
+    function canAccessHotel(hotelId) {
+      return isSuperAdmin() ||
+             belongsToHotel(hotelId) ||
+             (isChainAdmin() && resource.data.organizationId != null &&
+              belongsToOrganization(resource.data.organizationId));
+    }
+    
+    // ============================================
+    // REGLAS PARA PLATAFORMA
+    // ============================================
+    
+    // Configuración de plataforma
+    match /platform/{documentId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+    
+    // Usuarios de plataforma
+    match /platform_users/{userId} {
+      allow read: if isAuthenticated();
+      allow write, create, delete: if isSuperAdmin();
+    }
+    
+    // Actividades de plataforma
+    match /platform_activities/{activityId} {
+      allow read: if isAuthenticated();
+      allow write, create, delete: if isSuperAdmin();
+    }
+    
+    // Alertas de plataforma
+    match /platform_alerts/{alertId} {
+      allow read: if isAuthenticated();
+      allow write, create, delete: if isSuperAdmin();
+    }
+    
+    // Planes de subscripción
+    match /subscription_plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write, create, delete: if isSuperAdmin();
+    }
+    
+    // Ventanas de mantenimiento
+    match /platform_maintenance/{maintenanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+    
+    // ============================================
+    // REGLAS PARA ORGANIZACIONES
+    // ============================================
+    
+    match /organizations/{organizationId} {
       allow read: if isAuthenticated() && 
-                     (isAdminOrSelf(userId) || belongsToHotel(resource.data.hotelId));
+                  (isSuperAdmin() || 
+                   isChainAdmin() || 
+                   belongsToOrganization(organizationId));
       allow write: if isAuthenticated() && 
-                      (hasPermission('users:manage') || request.auth.uid == userId);
-      allow create: if isAuthenticated() && hasPermission('users:manage');
-      allow delete: if isAuthenticated() && hasPermission('users:manage');
+                   (isSuperAdmin() || 
+                    (isChainAdmin() && belongsToOrganization(organizationId)));
+      
+      // Usuarios de la organización
+      match /users/{userId} {
+        allow read: if isAuthenticated() && 
+                    (isSuperAdmin() || 
+                     isChainAdmin() || 
+                     belongsToOrganization(organizationId));
+        allow write: if isAuthenticated() && 
+                     (isSuperAdmin() || 
+                      (isChainAdmin() && belongsToOrganization(organizationId)));
+      }
     }
-
-    // Reglas para hoteles y sus subcolecciones
+    
+    // ============================================
+    // REGLAS PARA HOTELES
+    // ============================================
+    
     match /hotels/{hotelId} {
-      allow read: if isAuthenticated() && belongsToHotel(hotelId);
+      allow read: if isAuthenticated() && canAccessHotel(hotelId);
       allow write: if isAuthenticated() && 
-                      (hasRole('admin') || hasPermission('settings:manage'));
+                   (isSuperAdmin() || 
+                    (isChainAdmin() && belongsToOrganization(resource.data.organizationId)));
       
-      // Documentos del SGC
-      match /documents/{documentId} {
-        allow read: if isAuthenticated() && 
-                       belongsToHotel(hotelId) && 
-                       hasPermission('documents:read');
+      // Usuarios del hotel
+      match /users/{userId} {
+        allow read: if isAuthenticated() && canAccessHotel(hotelId);
         allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        hasPermission('documents:write');
-        allow create: if isAuthenticated() && 
-                         belongsToHotel(hotelId) && 
-                         hasPermission('documents:write');
-        allow delete: if isAuthenticated() && 
-                         belongsToHotel(hotelId) && 
-                         hasPermission('documents:delete');
-      }
-      
-      // No conformidades
-      match /nonConformities/{ncId} {
-        allow read: if isAuthenticated() && 
-                       belongsToHotel(hotelId) && 
-                       hasPermission('nc:view');
-        allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        hasPermission('nc:manage');
-        allow create: if isAuthenticated() && 
-                         belongsToHotel(hotelId) && 
-                         hasPermission('nc:manage');
-      }
-      
-      // Procesos
-      match /processes/{processId} {
-        allow read: if isAuthenticated() && belongsToHotel(hotelId);
-        allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        hasPermission('settings:manage');
-      }
-      
-      // Auditorías
-      match /audits/{auditId} {
-        allow read: if isAuthenticated() && 
-                       belongsToHotel(hotelId) && 
-                       hasPermission('audits:view');
-        allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        hasPermission('audits:manage');
-        allow create: if isAuthenticated() && 
-                         belongsToHotel(hotelId) && 
-                         hasPermission('audits:manage');
-      }
-      
-      // Gamificación
-      match /gamification/{userId} {
-        allow read: if isAuthenticated() && belongsToHotel(hotelId);
-        allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        (isAdminOrSelf(userId) || hasPermission('users:manage'));
+                     canAccessHotel(hotelId) && 
+                     (isAdminOrSelf(userId) || hasPermission('users:manage'));
       }
       
       // Departamentos
       match /departments/{departmentId} {
-        allow read: if isAuthenticated() && belongsToHotel(hotelId);
+        allow read: if isAuthenticated() && canAccessHotel(hotelId);
         allow write: if isAuthenticated() && 
-                        belongsToHotel(hotelId) && 
-                        hasPermission('settings:manage');
-        allow create: if isAuthenticated() && 
-                         belongsToHotel(hotelId) && 
-                         hasPermission('settings:manage');
+                     canAccessHotel(hotelId) && 
+                     hasPermission('settings:manage');
       }
     }
-
-    // Reglas por defecto - denegar todo lo demás
+    
+    // ============================================
+    // REGLAS POR DEFECTO
+    // ============================================
+    
+    // Permitir lectura de configuraciones públicas
+    match /public/{document=**} {
+      allow read: if true;
+    }
+    
+    // Denegar todo lo demás por defecto
     match /{document=**} {
       allow read, write: if false;
     }

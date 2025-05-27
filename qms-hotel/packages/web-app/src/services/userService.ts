@@ -38,6 +38,7 @@ class UserService {
    */
   async getUserById(userId: string): Promise<User | null> {
     try {
+      // Primero buscar en la colección regular de usuarios
       const userRef = doc(db, this.COLLECTION, userId);
       const userDoc = await getDoc(userRef);
       
@@ -46,6 +47,21 @@ class UserService {
         return {
           ...data,
           id: userDoc.id,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          lastLoginAt: data.lastLoginAt?.toDate()
+        } as User;
+      }
+      
+      // Si no se encuentra, buscar en platform_users (para super admins)
+      const platformUserRef = doc(db, 'platform_users', userId);
+      const platformUserDoc = await getDoc(platformUserRef);
+      
+      if (platformUserDoc.exists()) {
+        const data = platformUserDoc.data();
+        return {
+          ...data,
+          id: platformUserDoc.id,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
           lastLoginAt: data.lastLoginAt?.toDate()
@@ -108,14 +124,24 @@ class UserService {
    */
   async updateLastLogin(userId: string): Promise<void> {
     try {
-      const userRef = doc(db, this.COLLECTION, userId);
-      await updateDoc(userRef, {
+      // Intentar actualizar en platform_users primero (para super admins)
+      const platformUserRef = doc(db, 'platform_users', userId);
+      await updateDoc(platformUserRef, {
         lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-    } catch (error) {
-      console.error('Error updating last login:', error);
-      throw error;
+    } catch (platformError: any) {
+      try {
+        // Si falla, intentar en la colección regular de usuarios
+        const userRef = doc(db, this.COLLECTION, userId);
+        await updateDoc(userRef, {
+          lastLoginAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (userError) {
+        console.warn('Could not update last login time:', { platformError, userError });
+        // No lanzar error para no bloquear el login
+      }
     }
   }
 
@@ -222,7 +248,18 @@ class UserService {
         'users:manage': false,
         'settings:manage': false,
         'audits:view': false,
-        'audits:manage': false
+        'audits:manage': false,
+        'platform:manage': false,
+        'organizations:manage': false,
+        'organizations:view': false,
+        'hotels:manage': false,
+        'hotels:create': false,
+        'hotels:view': false,
+        'subscriptions:manage': false,
+        'subscriptions:view': false,
+        'analytics:global': false,
+        'analytics:organization': false,
+        'analytics:hotel': false
       };
 
       // Activar solo los permisos del rol

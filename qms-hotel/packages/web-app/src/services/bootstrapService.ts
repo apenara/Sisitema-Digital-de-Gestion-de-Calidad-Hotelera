@@ -44,13 +44,7 @@ class BootstrapService {
   
   async isPlatformInitialized(): Promise<boolean> {
     try {
-      // Verificar si existe configuración de plataforma
-      const platformDoc = await getDoc(doc(db, 'platform', 'settings'));
-      if (!platformDoc.exists()) {
-        return false;
-      }
-      
-      // Verificar si existe al menos un super admin
+      // Verificar si existe al menos un super admin (condición principal)
       const superAdminsQuery = query(
         collection(db, 'platform_users'),
         where('role', '==', 'super_admin'),
@@ -58,7 +52,14 @@ class BootstrapService {
       );
       const superAdminsSnap = await getDocs(superAdminsQuery);
       
-      return !superAdminsSnap.empty;
+      // Si existe al menos un super admin, consideramos la plataforma inicializada
+      if (!superAdminsSnap.empty) {
+        console.log('✅ Plataforma inicializada: Super admin encontrado');
+        return true;
+      }
+      
+      console.log('❌ Plataforma no inicializada: No se encontraron super admins');
+      return false;
     } catch (error) {
       console.error('Error verificando inicialización de plataforma:', error);
       return false;
@@ -136,21 +137,92 @@ class BootstrapService {
   // ======================
   
   async createFirstSuperAdmin(data: CreateSuperAdminInput): Promise<User> {
+    let userCredential: any = null;
+    
     try {
+      console.log('🔐 Creando usuario en Firebase Auth...');
+      
       // 1. Crear usuario en Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
+      userCredential = await createUserWithEmailAndPassword(
         auth,
         data.email,
         data.password
       );
+      
+      console.log('✅ Usuario creado en Auth con ID:', userCredential.user.uid);
       
       // 2. Actualizar perfil en Auth
       await updateProfile(userCredential.user, {
         displayName: data.displayName
       });
       
-      // 3. Crear documento de usuario en Firestore
-      const superAdminUser: Omit<User, 'id'> = {
+      console.log('✅ Perfil actualizado en Auth');
+      
+      // 3. Preparar datos para Firestore
+      const now = new Date();
+      const userPermissions = this.getSuperAdminPermissions();
+      
+      const firestoreData = {
+        email: data.email,
+        displayName: data.displayName,
+        role: 'super_admin',
+        departmentIds: [],
+        isActive: true,
+        permissions: userPermissions,
+        preferences: {
+          theme: 'system',
+          language: 'es',
+          notifications: {
+            email: true,
+            push: true,
+            inApp: true
+          }
+        },
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now),
+        lastLoginAt: Timestamp.fromDate(now)
+      };
+      
+      // Solo agregar photoURL si existe
+      if (userCredential.user.photoURL) {
+        (firestoreData as any).photoURL = userCredential.user.photoURL;
+      }
+      
+      console.log('📝 Guardando usuario en Firestore...');
+      console.log('Datos a guardar:', firestoreData);
+      
+      // 4. Guardar en colección platform_users
+      try {
+        const userRef = doc(db, 'platform_users', userCredential.user.uid);
+        console.log('📍 Referencia del documento:', userRef.path);
+        console.log('🔥 Base de datos:', db.app.name);
+        
+        console.log('⏳ Ejecutando setDoc...');
+        await setDoc(userRef, firestoreData);
+        console.log('✅ setDoc completado sin errores');
+        
+        // 5. Verificar que se guardó correctamente
+        console.log('🔍 Verificando que el documento existe...');
+        const savedDoc = await getDoc(userRef);
+        
+        if (!savedDoc.exists()) {
+          console.error('❌ El documento NO existe después de setDoc');
+          throw new Error('El documento no se guardó correctamente en Firestore');
+        }
+        
+        console.log('✅ Verificación: documento existe en Firestore');
+        console.log('📄 Datos guardados:', savedDoc.data());
+        
+      } catch (firestoreError) {
+        console.error('❌ Error específico de Firestore:', firestoreError);
+        console.error('❌ Código de error:', (firestoreError as any)?.code);
+        console.error('❌ Mensaje:', (firestoreError as any)?.message);
+        throw new Error(`Error de Firestore: ${(firestoreError as any)?.message || firestoreError}`);
+      }
+      
+      // 6. Construir objeto User para retornar
+      const userToReturn: User = {
+        id: userCredential.user.uid,
         email: data.email,
         displayName: data.displayName,
         photoURL: userCredential.user.photoURL || undefined,
@@ -159,10 +231,10 @@ class BootstrapService {
         hotelId: undefined,
         departmentIds: [],
         isActive: true,
-        permissions: this.getSuperAdminPermissions(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastLoginAt: new Date(),
+        permissions: userPermissions,
+        createdAt: now,
+        updatedAt: now,
+        lastLoginAt: now,
         invitedBy: undefined,
         preferences: {
           theme: 'system',
@@ -175,22 +247,22 @@ class BootstrapService {
         }
       };
       
-      // 4. Guardar en colección platform_users
-      const userRef = doc(db, 'platform_users', userCredential.user.uid);
-      await setDoc(userRef, {
-        ...superAdminUser,
-        createdAt: Timestamp.fromDate(superAdminUser.createdAt),
-        updatedAt: Timestamp.fromDate(superAdminUser.updatedAt),
-        lastLoginAt: Timestamp.fromDate(superAdminUser.lastLoginAt!)
-      });
-      
-      return {
-        id: userCredential.user.uid,
-        ...superAdminUser
-      };
+      return userToReturn;
       
     } catch (error) {
-      console.error('Error creando super admin:', error);
+      console.error('❌ Error creando super admin:', error);
+      
+      // Si el usuario se creó en Auth pero falló en Firestore, eliminar de Auth
+      if (userCredential?.user) {
+        try {
+          console.log('🧹 Limpiando usuario de Auth debido al error...');
+          await userCredential.user.delete();
+          console.log('✅ Usuario eliminado de Auth');
+        } catch (cleanupError) {
+          console.error('❌ Error limpiando usuario de Auth:', cleanupError);
+        }
+      }
+      
       throw error;
     }
   }
@@ -210,10 +282,12 @@ class BootstrapService {
       const superAdmin = await this.createFirstSuperAdmin(data);
       
       // Agregar información de quién lo creó
-      await updateDoc(doc(db, 'platform_users', superAdmin.id), {
+      const updateData: any = {
         invitedBy: createdBy,
         updatedAt: Timestamp.now()
-      });
+      };
+      
+      await updateDoc(doc(db, 'platform_users', superAdmin.id), updateData);
       
       // Registrar actividad
       await addDoc(collection(db, 'platform_activities'), {
