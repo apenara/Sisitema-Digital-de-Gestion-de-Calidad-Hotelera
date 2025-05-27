@@ -103,7 +103,7 @@ const PlatformRoutes: React.FC = () => {
       />
 
       {/* Ruta por defecto */}
-      <Route path="*" element={<Navigate to="/platform" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

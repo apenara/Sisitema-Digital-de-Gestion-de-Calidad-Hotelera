@@ -36,6 +36,14 @@ interface BootstrapResult {
   error?: string;
 }
 
+interface SuperAdminAuthData {
+  email: string;
+  password: string;
+  displayName: string;
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string;
+}
+
 class BootstrapService {
   
   // ======================
@@ -136,7 +144,7 @@ class BootstrapService {
   // CREAR SUPER ADMIN
   // ======================
   
-  async createFirstSuperAdmin(data: CreateSuperAdminInput): Promise<User> {
+  async createFirstSuperAdmin(data: SuperAdminAuthData): Promise<User> {
     let userCredential: any = null;
     
     try {
@@ -178,9 +186,19 @@ class BootstrapService {
             inApp: true
           }
         },
+        security: {
+          twoFactorEnabled: data.twoFactorEnabled || false,
+          twoFactorSecret: data.twoFactorSecret || null,
+          failedLoginAttempts: 0,
+          lastFailedLogin: null,
+          accountLocked: false,
+          accountLockedUntil: null,
+          lastLoginAt: Timestamp.fromDate(now),
+          lastLoginIP: null,
+          lastLoginDevice: null
+        },
         createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now),
-        lastLoginAt: Timestamp.fromDate(now)
+        updatedAt: Timestamp.fromDate(now)
       };
       
       // Solo agregar photoURL si existe
@@ -632,6 +650,140 @@ class BootstrapService {
     console.log('  password: "TuPasswordSeguro123!",');
     console.log('  displayName: "Administrador Principal"');
     console.log('});\n');
+  }
+
+  async recordLoginActivity(userId: string, loginData: {
+    ip: string;
+    device: string;
+    success: boolean;
+  }): Promise<void> {
+    try {
+      const userRef = doc(db, 'platform_users', userId);
+      const now = Timestamp.now();
+      
+      const updateData: any = {
+        'security.lastLoginAt': now,
+        'security.lastLoginIP': loginData.ip,
+        'security.lastLoginDevice': loginData.device
+      };
+
+      if (loginData.success) {
+        updateData['security.failedLoginAttempts'] = 0;
+        updateData['security.accountLocked'] = false;
+        updateData['security.accountLockedUntil'] = null;
+      } else {
+        const userDoc = await getDoc(userRef);
+        const currentAttempts = (userDoc.data()?.security?.failedLoginAttempts || 0) + 1;
+        
+        updateData['security.failedLoginAttempts'] = currentAttempts;
+        updateData['security.lastFailedLogin'] = now;
+        
+        // Bloquear cuenta después de 5 intentos fallidos
+        if (currentAttempts >= 5) {
+          const lockUntil = new Date();
+          lockUntil.setHours(lockUntil.getHours() + 1); // Bloquear por 1 hora
+          
+          updateData['security.accountLocked'] = true;
+          updateData['security.accountLockedUntil'] = Timestamp.fromDate(lockUntil);
+        }
+      }
+
+      await updateDoc(userRef, updateData);
+
+      // Registrar actividad
+      await addDoc(collection(db, 'platform_activities'), {
+        type: loginData.success ? 'login_success' : 'login_failed',
+        description: loginData.success ? 
+          `Login exitoso desde ${loginData.device}` : 
+          `Intento de login fallido desde ${loginData.device}`,
+        entityType: 'user',
+        entityId: userId,
+        severity: loginData.success ? 'info' : 'warning',
+        timestamp: now,
+        metadata: {
+          ip: loginData.ip,
+          device: loginData.device
+        }
+      });
+
+    } catch (error) {
+      console.error('Error registrando actividad de login:', error);
+      throw error;
+    }
+  }
+
+  async checkAccountStatus(userId: string): Promise<{
+    isLocked: boolean;
+    lockUntil: Date | null;
+    failedAttempts: number;
+  }> {
+    try {
+      const userDoc = await getDoc(doc(db, 'platform_users', userId));
+      const security = userDoc.data()?.security || {};
+      
+      if (security.accountLocked && security.accountLockedUntil) {
+        const lockUntil = security.accountLockedUntil.toDate();
+        if (lockUntil > new Date()) {
+          return {
+            isLocked: true,
+            lockUntil,
+            failedAttempts: security.failedLoginAttempts || 0
+          };
+        }
+      }
+      
+      return {
+        isLocked: false,
+        lockUntil: null,
+        failedAttempts: security.failedLoginAttempts || 0
+      };
+    } catch (error) {
+      console.error('Error verificando estado de cuenta:', error);
+      throw error;
+    }
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    try {
+      const usersQuery = query(
+        collection(db, 'platform_users'),
+        where('email', '==', email)
+      );
+      const usersSnap = await getDocs(usersQuery);
+      
+      if (usersSnap.empty) {
+        return null;
+      }
+      
+      const userDoc = usersSnap.docs[0];
+      return {
+        id: userDoc.id,
+        ...userDoc.data()
+      } as User;
+      
+    } catch (error) {
+      console.error('Error obteniendo usuario por email:', error);
+      throw error;
+    }
+  }
+  
+  async getUserById(userId: string): Promise<User | null> {
+    try {
+      const userDoc = await getDoc(doc(db, 'platform_users', userId));
+      
+      if (!userDoc.exists()) {
+        return null;
+      }
+      
+      return {
+        id: userDoc.id,
+        ...userDoc.data()
+      } as User;
+      
+    } catch (error) {
+      console.error('Error obteniendo usuario por ID:', error);
+      throw error;
+    }
   }
 }
 

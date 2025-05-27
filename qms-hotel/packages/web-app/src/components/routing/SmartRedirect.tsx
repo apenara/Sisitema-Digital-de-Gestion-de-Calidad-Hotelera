@@ -1,48 +1,79 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { useAuth } from '../../context/AuthContext';
 
 const SmartRedirect: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+  console.log('[SmartRedirect] State from useAuth():', { isLoading, isAuthenticated, userId: user?.id, userRole: user?.role, currentPath: location.pathname });
   const navigate = useNavigate();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (isLoading) return; // Don't run effect if still loading
+    console.log('[SmartRedirect] useEffect triggered. Dependencies:', { isLoading, isAuthenticated, user, navigate, isRedirecting, locationPathname: location.pathname });
+
+    if (isLoading) {
+      console.log('[SmartRedirect] useEffect: isLoading is true. Waiting.');
+      return; 
+    }
 
     const handleRedirect = async () => {
-      if (isRedirecting) return;
+      // Removed the top-level `if (isRedirecting) return;` to allow path checking logic to run and clear the flag.
+      // The individual navigate calls will now check `!isRedirecting` or rely on path checks.
 
-      // Si no está autenticado, redirigir al login
       if (!isAuthenticated) {
-        setIsRedirecting(true);
-        navigate('/login', { replace: true });
+        const loginPath = '/login';
+        if (location.pathname === loginPath) {
+          console.log('[SmartRedirect] useEffect: Unauthenticated and already at /login.');
+          if (isRedirecting) setIsRedirecting(false);
+        } else {
+          console.log('[SmartRedirect] useEffect: Not authenticated. Navigating to /login.');
+          if (!isRedirecting) setIsRedirecting(true);
+          await navigate(loginPath, { replace: true });
+        }
         return;
       }
 
-      // Si no hay usuario cargado aún, esperar (esto es manejado por isLoading ahora)
-      // if (!user) {
-      //   return;
-      // }
-
-      // Redirección basada en el rol del usuario
-      // Solo proceder si el usuario está cargado
       if (user) {
-        setIsRedirecting(true);
+        console.log('[SmartRedirect] useEffect: Authenticated with user. User role:', user.role, 'Attempting role-based redirect.');
+        // No setIsRedirecting(true) globally here. It's per-case now.
         try {
+          let targetPath: string;
           switch (user.role) {
             case 'super_admin':
-              await navigate('/platform', { replace: true });
+              targetPath = '/platform';
+              if (location.pathname === targetPath) {
+                console.log('[SmartRedirect] useEffect: User is super_admin and already at /platform.');
+                if (isRedirecting) setIsRedirecting(false);
+              } else {
+                console.log('[SmartRedirect] useEffect: User is super_admin. Navigating to /platform.');
+                if (!isRedirecting) setIsRedirecting(true);
+                await navigate(targetPath, { replace: true });
+              }
               break;
             
             case 'chain_admin':
-              // Si tiene organizationId, ir al dashboard de la organización
               if (user.organizationId) {
-                await navigate(`/org/${user.organizationId}`, { replace: true });
+                targetPath = `/org/${user.organizationId}`;
+                if (location.pathname === targetPath) {
+                  console.log(`[SmartRedirect] useEffect: User is chain_admin and already at ${targetPath}.`);
+                  if (isRedirecting) setIsRedirecting(false);
+                } else {
+                  console.log(`[SmartRedirect] useEffect: User is chain_admin with organizationId ${user.organizationId}. Navigating to ${targetPath}.`);
+                  if (!isRedirecting) setIsRedirecting(true);
+                  await navigate(targetPath, { replace: true });
+                }
               } else {
-                // Si no, ir al dashboard de plataforma
-                await navigate('/platform', { replace: true });
+                targetPath = '/platform';
+                if (location.pathname === targetPath) {
+                  console.log('[SmartRedirect] useEffect: User is chain_admin (no orgId) and already at /platform.');
+                  if (isRedirecting) setIsRedirecting(false);
+                } else {
+                  console.log('[SmartRedirect] useEffect: User is chain_admin without organizationId. Navigating to /platform.');
+                  if (!isRedirecting) setIsRedirecting(true);
+                  await navigate(targetPath, { replace: true });
+                }
               }
               break;
             
@@ -51,19 +82,37 @@ const SmartRedirect: React.FC = () => {
             case 'department_manager':
             case 'employee':
             default:
-              // Usuarios de hotel van al dashboard de hotel
-              await navigate('/dashboard', { replace: true });
+              targetPath = '/dashboard';
+              if (location.pathname === targetPath) {
+                console.log(`[SmartRedirect] useEffect: User is ${user.role} and already at /dashboard.`);
+                if (isRedirecting) setIsRedirecting(false);
+              } else {
+                console.log(`[SmartRedirect] useEffect: User is ${user.role}. Navigating to /dashboard.`);
+                if (!isRedirecting) setIsRedirecting(true);
+                await navigate(targetPath, { replace: true });
+              }
               break;
           }
         } catch (error) {
-          console.error('Error durante la redirección:', error);
-          setIsRedirecting(false); // Resetear en caso de error para permitir reintentos
+          console.error('[SmartRedirect] useEffect: Error during navigation:', error);
+          if (isRedirecting) setIsRedirecting(false); // Resetear en caso de error para permitir reintentos
         }
+      } else if (!isLoading) { // User is null, not loading, and we passed isAuthenticated check (should be false)
+          // This case should technically be caught by the !isAuthenticated block above.
+          // Adding a log for robustness in case of unexpected state.
+          console.warn('[SmartRedirect] useEffect: User is null, not loading, but isAuthenticated was true. This state is unexpected. Redirecting to login.');
+          const loginPath = '/login';
+           if (location.pathname === loginPath) {
+              if (isRedirecting) setIsRedirecting(false);
+           } else {
+              if (!isRedirecting) setIsRedirecting(true);
+              await navigate(loginPath, { replace: true });
+           }
       }
     };
 
     handleRedirect();
-  }, [isAuthenticated, user, isLoading, navigate, isRedirecting]);
+  }, [isAuthenticated, user, isLoading, navigate, isRedirecting, location]);
 
   // Mostrar loading mientras se procesa la redirección o se carga el estado de autenticación
   if (isLoading) {

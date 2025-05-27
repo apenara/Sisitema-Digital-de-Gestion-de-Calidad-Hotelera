@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RouterProvider } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
@@ -12,6 +12,38 @@ import { useBootstrap } from './hooks/useBootstrap';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { TenantProvider } from './context/TenantContext';
+import { useAppSelector } from './store';
+import { selectIsAuthenticated, selectUser } from './store/slices/authSlice';
+import { LoginForm } from './components/auth/LoginForm';
+import { RegisterForm } from './components/auth/RegisterForm';
+import { PlatformLayout } from './pages/platform/PlatformLayout';
+import PlatformDashboard from './pages/platform/PlatformDashboard';
+import OrganizationsPage from './pages/platform/OrganizationsPage';
+import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm';
+import { ResetPasswordForm } from './components/auth/ResetPasswordForm';
+import { AuthLayout } from './components/layout/AuthLayout';
+import { DashboardLayout } from './components/layout/DashboardLayout';
+
+
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const user = useAppSelector(selectUser);
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  
+  if (user?.role !== 'super_admin') {
+    return <Navigate to="/dashboard" />;
+  }
+  
+  return <>{children}</>;
+};
 
 // Componente interno que usa el hook de bootstrap
 const AppContent: React.FC = () => {
@@ -63,7 +95,70 @@ const AppContent: React.FC = () => {
       <CssBaseline />
       <AuthProvider>
         <TenantProvider>
-          <RouterProvider router={router} />
+          <Router>
+            <Routes>
+              {/* Rutas públicas */}
+              <Route path="/login" element={
+                <AuthLayout>
+                  <LoginForm />
+                </AuthLayout>
+              } />
+              <Route path="/register" element={
+                <AuthLayout>
+                  <RegisterForm />
+                </AuthLayout>
+              } />
+              <Route path="/forgot-password" element={
+                <AuthLayout>
+                  <ForgotPasswordForm />
+                </AuthLayout>
+              } />
+              <Route path="/reset-password" element={
+                <AuthLayout>
+                  <ResetPasswordForm />
+                </AuthLayout>
+              } />
+
+              {/* Rutas de la plataforma administrativa */}
+              <Route path="/platform" element={
+                <PlatformRoute>
+                  <PlatformLayout>
+                    <PlatformDashboard />
+                  </PlatformLayout>
+                </PlatformRoute>
+              } />
+              <Route path="/platform/*" element={
+                <PlatformRoute>
+                  <PlatformLayout>
+                    <Routes>
+                      <Route path="organizations" element={<OrganizationsPage />} />
+                      <Route path="hotels" element={<div>Hoteles</div>} />
+                      <Route path="users" element={<div>Usuarios</div>} />
+                      <Route path="subscriptions" element={<div>Suscripciones</div>} />
+                      <Route path="reports" element={<div>Reportes</div>} />
+                      <Route path="settings" element={<div>Configuración</div>} />
+                    </Routes>
+                  </PlatformLayout>
+                </PlatformRoute>
+              } />
+
+              {/* Rutas del dashboard */}
+              <Route path="/dashboard/*" element={
+                <PrivateRoute>
+                  <DashboardLayout>
+                    <Routes>
+                      <Route index element={<div>Dashboard</div>} />
+                      <Route path="profile" element={<div>Perfil</div>} />
+                      <Route path="settings" element={<div>Configuración</div>} />
+                    </Routes>
+                  </DashboardLayout>
+                </PrivateRoute>
+              } />
+
+              {/* Redirección por defecto */}
+              <Route path="/" element={<Navigate to="/login" />} />
+            </Routes>
+          </Router>
           <ToastContainer
             position="top-right"
             autoClose={5000}

@@ -1,9 +1,209 @@
+import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { firestoreService } from './firestoreService';
-import type { Hotel, Department, CreateHotelData, UpdateHotelData, CreateDepartmentData, UpdateDepartmentData } from '../../../shared/types';
+import type { Department, CreateHotelData, UpdateHotelData, CreateDepartmentData, UpdateDepartmentData } from '../../../shared/types';
+
+export interface Hotel {
+  id: string;
+  name: string;
+  organizationId: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+  contact: {
+    email: string;
+    phone: string;
+    website: string;
+  };
+  status: 'active' | 'inactive' | 'pending';
+  stars: number;
+  rooms: number;
+  type: 'independent' | 'chain_member';
+  settings: {
+    timezone: string;
+    currency: string;
+    language: string;
+    theme: {
+      primaryColor: string;
+      secondaryColor: string;
+    };
+    branding: {
+      theme: {
+        primaryColor: string;
+        secondaryColor: string;
+      };
+    };
+    features: {
+      documentsEnabled: boolean;
+      nonConformitiesEnabled: boolean;
+      auditsEnabled: boolean;
+      reportsEnabled: boolean;
+      analyticsEnabled: boolean;
+      notificationsEnabled: boolean;
+    };
+    notifications: {
+      emailAlerts: boolean;
+      pushNotifications: boolean;
+    };
+    quality: {
+      defaultProcesses: string[];
+      auditFrequency: 'monthly' | 'quarterly' | 'yearly';
+      complianceStandards: string[];
+      qualityObjectives: string[];
+    };
+    integrations: Record<string, any>;
+  };
+  departments: string[];
+  isActive: boolean;
+  subscriptionPlan: 'basic' | 'premium' | 'enterprise';
+  subscriptionExpiry: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 class HotelService {
+  private readonly collectionName = 'hotels';
   private readonly HOTELS_COLLECTION = 'hotels';
   private readonly DEPARTMENTS_COLLECTION = 'departments';
+
+  async getAll(): Promise<Hotel[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Hotel));
+    } catch (error) {
+      console.error('Error al obtener hoteles:', error);
+      throw error;
+    }
+  }
+
+  async getById(id: string): Promise<Hotel | null> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        } as Hotel;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error al obtener hotel:', error);
+      throw error;
+    }
+  }
+
+  async getByOrganization(organizationId: string): Promise<Hotel[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('organizationId', '==', organizationId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Hotel));
+    } catch (error) {
+      console.error('Error al obtener hoteles de la organización:', error);
+      throw error;
+    }
+  }
+
+  async create(data: Omit<Hotel, 'id' | 'createdAt' | 'updatedAt'>): Promise<Hotel> {
+    try {
+      const now = new Date().toISOString();
+      const newData = {
+        ...data,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const docRef = await addDoc(collection(db, this.collectionName), newData);
+      return {
+        id: docRef.id,
+        ...newData
+      } as Hotel;
+    } catch (error) {
+      console.error('Error al crear hotel:', error);
+      throw error;
+    }
+  }
+
+  async update(id: string, data: Partial<Omit<Hotel, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      const updateData = {
+        ...data,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await updateDoc(docRef, updateData);
+    } catch (error) {
+      console.error('Error al actualizar hotel:', error);
+      throw error;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, this.collectionName, id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error al eliminar hotel:', error);
+      throw error;
+    }
+  }
+
+  async getByStatus(status: Hotel['status']): Promise<Hotel[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('status', '==', status)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Hotel));
+    } catch (error) {
+      console.error('Error al obtener hoteles por estado:', error);
+      throw error;
+    }
+  }
+
+  async getByCity(city: string): Promise<Hotel[]> {
+    try {
+      const q = query(
+        collection(db, this.collectionName),
+        where('address.city', '==', city)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Hotel));
+    } catch (error) {
+      console.error('Error al obtener hoteles por ciudad:', error);
+      throw error;
+    }
+  }
 
   /**
    * Crear un nuevo hotel
@@ -16,7 +216,7 @@ class HotelService {
         isActive: true,
         status: 'active' as const,
         subscriptionPlan: 'basic' as const,
-        subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+        subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días
         ownerId,
         createdAt: new Date(),
         updatedAt: new Date(),

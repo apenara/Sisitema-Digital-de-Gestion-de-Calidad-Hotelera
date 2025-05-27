@@ -4,7 +4,8 @@ import {
   signOut,
   sendPasswordResetEmail,
   updateProfile,
-  deleteUser
+  deleteUser,
+  confirmPasswordReset
 } from 'firebase/auth';
 import type { User as FirebaseUser, UserCredential } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -12,6 +13,7 @@ import type { LoginCredentials, RegisterCredentials } from '../../../shared/type
 import type { AuthError } from '../../../shared/types/Auth';
 import { userService } from './userService';
 import { ROLE_PERMISSIONS } from '../../../shared/types/User';
+import type { User } from '../types';
 
 class AuthService {
   /**
@@ -151,8 +153,19 @@ class AuthService {
   /**
    * Obtener el usuario actual
    */
-  getCurrentUser(): FirebaseUser | null {
-    return auth.currentUser;
+  getCurrentUser(): User | null {
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    return {
+      id: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || '',
+      role: 'user', // TODO: Obtener rol real del usuario
+      createdAt: user.metadata.creationTime || new Date().toISOString(),
+      updatedAt: user.metadata.lastSignInTime || new Date().toISOString()
+    };
   }
 
   /**
@@ -218,6 +231,26 @@ class AuthService {
    */
   onAuthStateChanged(callback: (user: FirebaseUser | null) => void) {
     return auth.onAuthStateChanged(callback);
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Error al enviar correo de recuperación:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Confirmar restablecimiento de contraseña
+   */
+  async confirmPasswordReset(oobCode: string, newPassword: string): Promise<void> {
+    try {
+      await confirmPasswordReset(auth, oobCode, newPassword);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
   }
 }
 

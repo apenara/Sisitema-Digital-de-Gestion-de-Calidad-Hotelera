@@ -644,6 +644,128 @@ class OrganizationService {
       return null;
     }
   }
+
+  async getAll(): Promise<Organization[]> {
+    try {
+      const querySnapshot = await getDocs(collection(db, this.organizationsCollection));
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: new Date(data.createdAt),
+          updatedAt: new Date(data.updatedAt)
+        } as Organization;
+      });
+    } catch (error) {
+      console.error('Error getting organizations:', error);
+      throw error;
+    }
+  }
+
+  async getById(id: string): Promise<Organization | null> {
+    try {
+      const docRef = doc(db, this.organizationsCollection, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: new Date(data.createdAt),
+          updatedAt: new Date(data.updatedAt)
+        } as Organization;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting organization:', error);
+      throw error;
+    }
+  }
+
+  async create(data: CreateOrganizationInput): Promise<Organization> {
+    try {
+      const now = new Date();
+      const docRef = await addDoc(collection(db, this.organizationsCollection), {
+        ...data,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      });
+      return {
+        id: docRef.id,
+        ...data,
+        createdAt: now,
+        updatedAt: now
+      } as Organization;
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      throw error;
+    }
+  }
+
+  async update(id: string, data: UpdateOrganizationInput): Promise<void> {
+    try {
+      const docRef = doc(db, this.organizationsCollection, id);
+      const now = new Date();
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: now.toISOString()
+      });
+    } catch (error) {
+      console.error('Error updating organization:', error);
+      throw error;
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, this.organizationsCollection, id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting organization:', error);
+      throw error;
+    }
+  }
+
+  async getByStatus(status: Organization['status']): Promise<Organization[]> {
+    try {
+      const q = query(collection(db, this.organizationsCollection), where('status', '==', status));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: new Date(data.createdAt),
+          updatedAt: new Date(data.updatedAt)
+        } as Organization;
+      });
+    } catch (error) {
+      console.error('Error getting organizations by status:', error);
+      throw error;
+    }
+  }
+
+  async getByEmail(email: string): Promise<Organization | null> {
+    try {
+      const q = query(collection(db, this.organizationsCollection), where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: new Date(data.createdAt),
+          updatedAt: new Date(data.updatedAt)
+        } as Organization;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting organization by email:', error);
+      throw error;
+    }
+  }
 }
 
 export const organizationService = new OrganizationService();
