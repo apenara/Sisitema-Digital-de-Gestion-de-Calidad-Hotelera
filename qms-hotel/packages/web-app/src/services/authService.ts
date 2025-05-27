@@ -3,9 +3,10 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
-  updateProfile
+  updateProfile,
+  deleteUser
 } from 'firebase/auth';
-import type { User as FirebaseUser } from 'firebase/auth';
+import type { User as FirebaseUser, UserCredential } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import type { LoginCredentials, RegisterCredentials } from '../../../shared/types';
 import type { AuthError } from '../../../shared/types/Auth';
@@ -24,11 +25,17 @@ class AuthService {
         credentials.password
       );
       
-      // Actualizar última fecha de login (temporalmente deshabilitado durante bootstrap)
+      // Attempt to update last login time
       try {
         await userService.updateLastLogin(userCredential.user.uid);
       } catch (error) {
-        console.warn('Could not update last login time, but login successful:', error);
+        // Log critical error but allow login to proceed
+        console.error(
+          'CRITICAL: Failed to update last login time for user:',
+          userCredential.user.uid,
+          'Error:',
+          error
+        );
       }
       
       return userCredential.user;
@@ -41,9 +48,10 @@ class AuthService {
    * Registrar nuevo usuario
    */
   async register(credentials: RegisterCredentials): Promise<FirebaseUser> {
+    let userCredential: UserCredential | null = null; 
     try {
       // Crear usuario en Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
+      userCredential = await createUserWithEmailAndPassword(
         auth,
         credentials.email,
         credentials.password
@@ -55,35 +63,65 @@ class AuthService {
       });
 
       // Crear documento de usuario en Firestore
-      const permissions = ROLE_PERMISSIONS[credentials.role].reduce((acc, permission) => {
-        acc[permission] = true;
-        return acc;
-      }, {} as any);
+      try {
+        const permissions = ROLE_PERMISSIONS[credentials.role].reduce((acc, permission) => {
+          acc[permission] = true;
+          return acc;
+        }, {} as any);
 
-      await userService.createUser({
-        id: userCredential.user.uid,
-        email: credentials.email,
-        displayName: credentials.displayName,
-        role: credentials.role,
-        hotelId: credentials.hotelId,
-        departmentIds: credentials.departmentIds,
-        isActive: true,
-        permissions,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        preferences: {
-          theme: 'light',
-          language: 'es',
-          notifications: {
-            email: true,
-            push: true,
-            inApp: true
+        await userService.createUser({
+          id: userCredential.user.uid,
+          email: credentials.email,
+          displayName: credentials.displayName,
+          role: credentials.role,
+          hotelId: credentials.hotelId,
+          departmentIds: credentials.departmentIds,
+          isActive: true,
+          permissions,
+          // userService.createUser uses serverTimestamp(), so no need to pass dates here
+          // createdAt: new Date(), 
+          // updatedAt: new Date(),
+          preferences: {
+            theme: 'light',
+            language: 'es',
+            notifications: {
+              email: true,
+              push: true,
+              inApp: true
+            }
+          }
+        });
+      } catch (firestoreError: any) {
+        console.error('Firestore user creation failed after Firebase Auth user was created. Attempting to delete Firebase Auth user.', firestoreError);
+        if (userCredential && userCredential.user) {
+          try {
+            await deleteUser(userCredential.user);
+            console.log('Orphaned Firebase Auth user deleted successfully. UID:', userCredential.user.uid);
+          } catch (deleteAuthUserError: any) {
+            console.error('CRITICAL: Failed to delete orphaned Firebase Auth user. Manual cleanup may be required. UID:', userCredential.user.uid, deleteAuthUserError);
+            // Decide if you want to throw a custom error here indicating the critical state
+            // For now, we will re-throw the firestoreError, but this critical state should be logged
           }
         }
-      });
+        // Re-throw the original Firestore error or a new error indicating partial registration failure
+        // Using a generic error message to avoid exposing too much detail to the client,
+        // while the console has the detailed firestoreError.
+        throw new Error(`Registration failed: Could not create user profile. Original error: ${firestoreError.message}`);
+      }
 
       return userCredential.user;
     } catch (error: any) {
+      // This outer catch will now also catch errors re-thrown from the inner block
+      // (like the new Error for Firestore issues) or errors from the initial
+      // createUserWithEmailAndPassword/updateProfile (handled by handleAuthError).
+      if (error.message.startsWith('Registration failed:')) {
+        // This is one of the errors we threw from the inner catch block
+        // It's not a standard Firebase Auth error, so handleAuthError might not be ideal
+        // We can wrap it in a similar structure as AuthError or re-throw as is.
+        // For simplicity, re-throwing for now. The UI should handle this generic error.
+        throw error;
+      }
+      // If it's a Firebase Auth error from initial creation, handle it
       throw this.handleAuthError(error);
     }
   }

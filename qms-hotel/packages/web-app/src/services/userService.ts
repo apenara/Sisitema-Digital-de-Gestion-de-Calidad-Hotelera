@@ -13,11 +13,17 @@ import { db } from '../config/firebase';
 import type { User, CreateUserData, UpdateUserData, UserPermissions } from '../../../shared/types';
 import { ROLE_PERMISSIONS } from '../../../shared/types/User';
 
+// Manages user data. Users are primarily stored in the 'users' collection.
+// Super admin users may also have records in the 'platform_users' collection,
+// which is checked by certain methods (getUserById, updateLastLogin, updateUser, getUserByEmail).
+// Creation of super admins in 'platform_users' is assumed to be handled manually or via separate admin tooling.
 class UserService {
   private readonly COLLECTION = 'users';
+  private readonly PLATFORM_USERS_COLLECTION = 'platform_users';
 
   /**
-   * Crear un nuevo usuario en Firestore
+   * Crear un nuevo usuario en Firestore.
+   * Operates only on the 'users' collection.
    */
   async createUser(userData: User): Promise<void> {
     try {
@@ -80,10 +86,28 @@ class UserService {
    */
   async getUserByEmail(email: string): Promise<User | null> {
     try {
+      // Primero buscar en platform_users
+      const platformUsersRef = collection(db, this.PLATFORM_USERS_COLLECTION);
+      const platformQ = query(platformUsersRef, where('email', '==', email));
+      const platformQuerySnapshot = await getDocs(platformQ);
+
+      if (!platformQuerySnapshot.empty) {
+        const userDoc = platformQuerySnapshot.docs[0];
+        const data = userDoc.data();
+        return {
+          ...data,
+          id: userDoc.id,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+          lastLoginAt: data.lastLoginAt?.toDate()
+        } as User;
+      }
+
+      // Si no se encuentra, buscar en la colección regular de usuarios
       const usersRef = collection(db, this.COLLECTION);
       const q = query(usersRef, where('email', '==', email));
       const querySnapshot = await getDocs(q);
-      
+
       if (!querySnapshot.empty) {
         const userDoc = querySnapshot.docs[0];
         const data = userDoc.data();
@@ -95,27 +119,46 @@ class UserService {
           lastLoginAt: data.lastLoginAt?.toDate()
         } as User;
       }
-      
+
       return null;
     } catch (error) {
-      console.error('Error getting user by email:', error);
+      console.error('Error getting user by email from either collection:', error);
       throw error;
     }
   }
 
   /**
-   * Actualizar usuario
+   * Actualizar usuario.
+   * Attempts to update in 'platform_users' first, then in 'users'.
    */
   async updateUser(userId: string, updates: UpdateUserData): Promise<void> {
+    let platformError: any = null;
+    try {
+      const platformUserRef = doc(db, this.PLATFORM_USERS_COLLECTION, userId);
+      await updateDoc(platformUserRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+      // If successful, assume this was the intended user (super admin) and return.
+      return;
+    } catch (error: any) {
+      // If the document does not exist in platform_users, updateDoc will throw an error.
+      // We'll catch it and then try the regular users collection.
+      platformError = error;
+    }
+
+    // If platform update failed, try regular users collection.
+    // This block will be executed if platformError is not null.
     try {
       const userRef = doc(db, this.COLLECTION, userId);
       await updateDoc(userRef, {
         ...updates,
         updatedAt: serverTimestamp()
       });
-    } catch (error) {
-      console.error('Error updating user:', error);
-      throw error;
+    } catch (userError) {
+      // If both attempts fail, log both errors and throw the error from the second attempt.
+      console.error('Error updating user in both platform_users and users collections:', { platformError, userError });
+      throw userError; 
     }
   }
 
@@ -123,6 +166,7 @@ class UserService {
    * Actualizar última fecha de login
    */
   async updateLastLogin(userId: string): Promise<void> {
+    let platformError: any = null;
     try {
       // Intentar actualizar en platform_users primero (para super admins)
       const platformUserRef = doc(db, 'platform_users', userId);
@@ -130,23 +174,31 @@ class UserService {
         lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-    } catch (platformError: any) {
+      // Si tiene éxito, no necesitamos hacer nada más.
+      return;
+    } catch (error) {
+      platformError = error;
+    }
+
+    // Si la actualización de platform_users falló, intentar en la colección regular de users
+    if (platformError) {
       try {
-        // Si falla, intentar en la colección regular de usuarios
         const userRef = doc(db, this.COLLECTION, userId);
         await updateDoc(userRef, {
           lastLoginAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       } catch (userError) {
-        console.warn('Could not update last login time:', { platformError, userError });
-        // No lanzar error para no bloquear el login
+        // Si ambas actualizaciones fallan, lanzar el error de la segunda actualización (o un error combinado)
+        console.warn('Failed to update last login time in platform_users, then in users:', { platformError, userError });
+        throw userError; // Propagar el error si ambas fallan
       }
     }
   }
 
   /**
-   * Obtener usuarios de un hotel
+   * Obtener usuarios de un hotel.
+   * Operates only on the 'users' collection.
    */
   async getUsersByHotel(hotelId: string): Promise<User[]> {
     try {
@@ -175,7 +227,8 @@ class UserService {
   }
 
   /**
-   * Obtener usuarios de un departamento
+   * Obtener usuarios de un departamento.
+   * Operates only on the 'users' collection.
    */
   async getUsersByDepartment(hotelId: string, departmentId: string): Promise<User[]> {
     try {
@@ -226,7 +279,8 @@ class UserService {
   }
 
   /**
-   * Actualizar permisos del usuario según su rol
+   * Actualizar permisos del usuario según su rol.
+   * This method uses updateUser, which now handles dual collections.
    */
   async updateUserPermissions(userId: string, role: User['role']): Promise<void> {
     try {
@@ -276,7 +330,8 @@ class UserService {
   }
 
   /**
-   * Activar/desactivar usuario
+   * Activar/desactivar usuario.
+   * This method uses updateUser, which now handles dual collections.
    */
   async toggleUserStatus(userId: string, isActive: boolean): Promise<void> {
     try {

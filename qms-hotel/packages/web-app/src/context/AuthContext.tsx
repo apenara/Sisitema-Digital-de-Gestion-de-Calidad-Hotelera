@@ -101,10 +101,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
       console.error('Login error:', error);
+      const processedError = authService.handleAuthError(error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Error al iniciar sesión'
+        error: processedError.message
       }));
       throw error;
     }
@@ -117,10 +118,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
       console.error('Register error:', error);
+      const processedError = authService.handleAuthError(error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Error al registrar usuario'
+        error: processedError.message
       }));
       throw error;
     }
@@ -133,10 +135,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // El estado se actualizará automáticamente por onAuthStateChanged
     } catch (error: any) {
       console.error('Logout error:', error);
+      const processedError = authService.handleAuthError(error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Error al cerrar sesión'
+        error: processedError.message
       }));
       throw error;
     }
@@ -149,10 +152,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthState(prev => ({ ...prev, isLoading: false }));
     } catch (error: any) {
       console.error('Reset password error:', error);
+      const processedError = authService.handleAuthError(error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,
-        error: error.message || 'Error al enviar email de recuperación'
+        error: processedError.message
       }));
       throw error;
     }
