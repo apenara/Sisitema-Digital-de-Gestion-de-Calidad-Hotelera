@@ -2,7 +2,7 @@ export interface Organization {
   id: string;
   name: string;
   description?: string;
-  type: 'hotel_chain' | 'hotel_group' | 'management_company';
+  type: 'corporation' | 'franchise' | 'holding' | 'group' | 'consortium';
   
   // Configuración
   settings: OrganizationSettings;
@@ -16,7 +16,7 @@ export interface Organization {
   status: 'active' | 'suspended' | 'inactive';
   
   // Estadísticas
-  totalHotels?: number;
+  totalCompanies?: number;
   totalUsers?: number;
 }
 
@@ -30,9 +30,9 @@ export interface OrganizationSettings {
   
   // Configuración funcional
   features: {
-    multiHotelManagement: boolean;
+    multiCompanyManagement: boolean;
     centralizedReporting: boolean;
-    crossHotelAnalytics: boolean;
+    crossCompanyAnalytics: boolean;
     standardizedProcesses: boolean;
   };
   
@@ -45,23 +45,23 @@ export interface OrganizationSettings {
   // Configuración de notificaciones
   notifications: {
     globalAlerts: boolean;
-    crossHotelReports: boolean;
-    chainMetrics: boolean;
+    crossCompanyReports: boolean;
+    organizationMetrics: boolean;
   };
 }
 
 export interface OrganizationUser {
   userId: string;
   organizationId: string;
-  role: 'chain_admin' | 'chain_manager' | 'chain_analyst';
+  role: 'org_admin' | 'org_manager' | 'org_analyst';
   permissions: string[];
   joinedAt: Date;
   invitedBy: string;
   status: 'active' | 'inactive' | 'pending';
 }
 
-export interface OrganizationHotel {
-  hotelId: string;
+export interface OrganizationCompany {
+  companyId: string;
   organizationId: string;
   addedAt: Date;
   addedBy: string;
@@ -87,9 +87,9 @@ export interface UpdateOrganizationInput {
 // Tipos para estadísticas y métricas
 export interface OrganizationMetrics {
   organizationId: string;
-  totalHotels: number;
+  totalCompanies: number;
   totalUsers: number;
-  activeHotels: number;
+  activeCompanies: number;
   totalDocuments: number;
   totalNonConformities: number;
   averageQualityScore: number;
@@ -97,7 +97,7 @@ export interface OrganizationMetrics {
     documentsCreated: number;
     nonConformitiesResolved: number;
     newUsers: number;
-    newHotels: number;
+    newCompanies: number;
   };
   calculatedAt: Date;
 }

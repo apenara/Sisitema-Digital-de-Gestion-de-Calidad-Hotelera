@@ -1,6 +1,8 @@
-// Shared types for QMS+Hotel
+// Shared types for QMS+
 export * from './Auth';
-export * from './Hotel';
+export * from './Hotel'; // Mantener temporalmente para compatibilidad
+export * from './Company'; // Nueva entidad generalizada
+export * from './Industry'; // Tipos de industria
 export * from './User';
 export * from './Document';
 export * from './NonConformity';

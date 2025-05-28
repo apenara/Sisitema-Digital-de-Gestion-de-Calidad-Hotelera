@@ -17,21 +17,28 @@ service cloud.firestore {
               exists(/databases/$(database)/documents/platform_users/$(request.auth.uid)));
     }
     
-    // Función para verificar si es chain admin
-    function isChainAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'chain_admin';
+    // Función para verificar si es admin de organización
+    function isOrgAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.role == 'org_admin' || 
+              request.auth.token.role == 'chain_admin'); // Compatibilidad temporal
     }
     
-    // Función para verificar si es hotel admin
-    function isHotelAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'hotel_admin';
+    // Función para verificar si es admin de empresa
+    function isCompanyAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.role == 'company_admin' || 
+              request.auth.token.role == 'hotel_admin'); // Compatibilidad temporal
     }
     
-    // Función para verificar si el usuario pertenece al hotel
-    function belongsToHotel(hotelId) {
+    // Función para verificar si el usuario pertenece a la empresa
+    function belongsToCompany(companyId) {
       return isAuthenticated() &&
-             (request.auth.token.context.hotelId == hotelId ||
-              request.auth.token.hotelId == hotelId);
+             (request.auth.token.context.companyId == companyId ||
+              request.auth.token.companyId == companyId ||
+              // Compatibilidad temporal con hotelId
+              request.auth.token.context.hotelId == companyId ||
+              request.auth.token.hotelId == companyId);
     }
     
     // Función para verificar si el usuario pertenece a la organización
@@ -55,14 +62,14 @@ service cloud.firestore {
     // Función para verificar si es admin o el propio usuario
     function isAdminOrSelf(userId) {
       return isAuthenticated() &&
-             (isSuperAdmin() || isChainAdmin() || isHotelAdmin() || request.auth.uid == userId);
+             (isSuperAdmin() || isOrgAdmin() || isCompanyAdmin() || request.auth.uid == userId);
     }
     
-    // Función para verificar acceso jerárquico a hotel
-    function canAccessHotel(hotelId) {
+    // Función para verificar acceso jerárquico a empresa
+    function canAccessCompany(companyId) {
       return isSuperAdmin() ||
-             belongsToHotel(hotelId) ||
-             (isChainAdmin() && resource.data.organizationId != null &&
+             belongsToCompany(companyId) ||
+             (isOrgAdmin() && resource.data.organizationId != null &&
               belongsToOrganization(resource.data.organizationId));
     }
     
@@ -113,48 +120,207 @@ service cloud.firestore {
     match /organizations/{organizationId} {
       allow read: if isAuthenticated() && 
                   (isSuperAdmin() || 
-                   isChainAdmin() || 
+                   isOrgAdmin() || 
                    belongsToOrganization(organizationId));
       allow write: if isAuthenticated() && 
                    (isSuperAdmin() || 
-                    (isChainAdmin() && belongsToOrganization(organizationId)));
+                    (isOrgAdmin() && belongsToOrganization(organizationId)));
       
       // Usuarios de la organización
       match /users/{userId} {
         allow read: if isAuthenticated() && 
                     (isSuperAdmin() || 
-                     isChainAdmin() || 
+                     isOrgAdmin() || 
                      belongsToOrganization(organizationId));
         allow write: if isAuthenticated() && 
                      (isSuperAdmin() || 
-                      (isChainAdmin() && belongsToOrganization(organizationId)));
+                      (isOrgAdmin() && belongsToOrganization(organizationId)));
+      }
+      
+      // Empresas de la organización
+      match /companies/{companyId} {
+        allow read: if isAuthenticated() && 
+                    (isSuperAdmin() || 
+                     belongsToOrganization(organizationId));
+        allow write: if isAuthenticated() && 
+                     (isSuperAdmin() || 
+                      (isOrgAdmin() && belongsToOrganization(organizationId)));
       }
     }
     
     // ============================================
-    // REGLAS PARA HOTELES
+    // REGLAS PARA EMPRESAS (COMPANIES)
     // ============================================
     
-    match /hotels/{hotelId} {
-      allow read: if isAuthenticated() && canAccessHotel(hotelId);
+    match /companies/{companyId} {
+      allow read: if isAuthenticated() && canAccessCompany(companyId);
       allow write: if isAuthenticated() && 
                    (isSuperAdmin() || 
-                    (isChainAdmin() && belongsToOrganization(resource.data.organizationId)));
+                    (isOrgAdmin() && belongsToOrganization(resource.data.organizationId)));
       
-      // Usuarios del hotel
+      // Usuarios de la empresa
       match /users/{userId} {
-        allow read: if isAuthenticated() && canAccessHotel(hotelId);
+        allow read: if isAuthenticated() && canAccessCompany(companyId);
         allow write: if isAuthenticated() && 
-                     canAccessHotel(hotelId) && 
+                     canAccessCompany(companyId) && 
                      (isAdminOrSelf(userId) || hasPermission('users:manage'));
       }
       
       // Departamentos
       match /departments/{departmentId} {
-        allow read: if isAuthenticated() && canAccessHotel(hotelId);
+        allow read: if isAuthenticated() && canAccessCompany(companyId);
         allow write: if isAuthenticated() && 
-                     canAccessHotel(hotelId) && 
+                     canAccessCompany(companyId) && 
                      hasPermission('settings:manage');
+      }
+      
+      // Documentos
+      match /documents/{documentId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('documents:read');
+        allow create: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('documents:write');
+        allow update: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('documents:write');
+        allow delete: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('documents:delete');
+      }
+      
+      // No conformidades
+      match /nonConformities/{ncId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('nc:view');
+        allow create: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('nc:manage');
+        allow update: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('nc:manage');
+        allow delete: if isAuthenticated() && 
+                      canAccessCompany(companyId) && 
+                      hasPermission('nc:manage');
+      }
+      
+      // Procesos
+      match /processes/{processId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('processes:read');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('processes:manage');
+      }
+      
+      // Auditorías
+      match /audits/{auditId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('audits:view');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('audits:manage');
+      }
+      
+      // Riesgos
+      match /risks/{riskId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('risks:view');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('risks:manage');
+      }
+      
+      // Capacitaciones
+      match /trainings/{trainingId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('trainings:view');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('trainings:manage');
+      }
+      
+      // Proveedores
+      match /suppliers/{supplierId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('suppliers:view');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('suppliers:manage');
+      }
+      
+      // Métricas y KPIs
+      match /metrics/{metricId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId) && 
+                    hasPermission('reports:view');
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     hasPermission('reports:manage');
+      }
+      
+      // Gamificación
+      match /gamification/{userId} {
+        allow read: if isAuthenticated() && 
+                    canAccessCompany(companyId);
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(companyId) && 
+                     (request.auth.uid == userId || hasPermission('gamification:manage'));
+      }
+    }
+    
+    // ============================================
+    // COMPATIBILIDAD CON HOTELES (TEMPORAL)
+    // ============================================
+    
+    match /hotels/{hotelId} {
+      allow read: if isAuthenticated() && canAccessCompany(hotelId);
+      allow write: if isAuthenticated() && 
+                   (isSuperAdmin() || 
+                    (isOrgAdmin() && belongsToOrganization(resource.data.organizationId)));
+      
+      // Redirección a la estructura de companies
+      match /{document=**} {
+        allow read: if isAuthenticated() && canAccessCompany(hotelId);
+        allow write: if isAuthenticated() && 
+                     canAccessCompany(hotelId) && 
+                     hasPermission('settings:manage');
+      }
+    }
+    
+    // ============================================
+    // REGLAS PARA SUBSCRIPCIONES
+    // ============================================
+    
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && 
+                  (isSuperAdmin() || 
+                   resource.data.userId == request.auth.uid ||
+                   resource.data.organizationId in request.auth.token.organizationIds ||
+                   resource.data.companyId == request.auth.token.companyId);
+      allow write: if isAuthenticated() && isSuperAdmin();
+      
+      // Facturas
+      match /invoices/{invoiceId} {
+        allow read: if isAuthenticated() && 
+                    (isSuperAdmin() || 
+                     resource.data.userId == request.auth.uid);
+        allow write: if isAuthenticated() && isSuperAdmin();
+      }
+      
+      // Pagos
+      match /payments/{paymentId} {
+        allow read: if isAuthenticated() && 
+                    (isSuperAdmin() || 
+                     resource.data.userId == request.auth.uid);
+        allow write: if isAuthenticated() && isSuperAdmin();
       }
     }
     

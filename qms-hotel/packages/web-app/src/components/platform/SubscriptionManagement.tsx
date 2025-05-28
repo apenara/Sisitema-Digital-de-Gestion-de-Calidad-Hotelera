@@ -28,6 +28,12 @@ import {
   selectOrganizations
 } from '../../store/slices/organizationSlice';
 import type { Subscription, SubscriptionPlan, CreateSubscriptionInput } from '../../../../shared/types/Subscription';
+import { 
+  SUBSCRIPTION_PLANS, 
+  calculatePrice, 
+  formatPrice,
+  type BillingCycle,
+} from '../../../../shared/types/SubscriptionPlan';
 
 interface SubscriptionFormData {
   organizationId?: string;
@@ -183,10 +189,10 @@ const SubscriptionManagement: React.FC = () => {
 
   const getPlanBadge = (planType: string) => {
     const planClasses = {
-      free: 'bg-gray-100 text-gray-800',
       basic: 'bg-blue-100 text-blue-800',
-      premium: 'bg-purple-100 text-purple-800',
-      enterprise: 'bg-red-100 text-red-800'
+      professional: 'bg-purple-100 text-purple-800',
+      enterprise: 'bg-red-100 text-red-800',
+      startup: 'bg-green-100 text-green-800'
     };
     
     return (
@@ -196,12 +202,7 @@ const SubscriptionManagement: React.FC = () => {
     );
   };
 
-  const formatCurrency = (amount: number, currency: string = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency
-    }).format(amount);
-  };
+  // Using formatPrice from SubscriptionPlan instead of local formatCurrency
 
   const filteredSubscriptionsList = allSubscriptions.filter(sub => {
     if (!searchQuery) return true;
@@ -257,7 +258,7 @@ const SubscriptionManagement: React.FC = () => {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">MRR</dt>
                     <dd className="text-lg font-medium text-gray-900">
-                      {formatCurrency(totalMRR)}
+                      {formatPrice(totalMRR)}
                     </dd>
                   </dl>
                 </div>
@@ -415,7 +416,7 @@ const SubscriptionManagement: React.FC = () => {
                         
                         <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
                           <span>
-                            {formatCurrency(subscription.plan.pricing.amount, subscription.plan.pricing.currency)} / {subscription.plan.pricing.interval}
+                            {formatPrice(subscription.plan.pricing.amount)} / {subscription.plan.pricing.interval}
                           </span>
                           <span>•</span>
                           <span>
@@ -481,7 +482,7 @@ const SubscriptionManagement: React.FC = () => {
                       <option value="">Seleccionar plan</option>
                       {plans.filter(plan => plan.isActive && plan.isPublic).map(plan => (
                         <option key={plan.id} value={plan.id}>
-                          {plan.name} - {formatCurrency(plan.pricing.amount, plan.pricing.currency)}/{plan.pricing.interval}
+                          {plan.name} - {formatPrice(plan.pricing.amount)}/{plan.pricing.interval}
                         </option>
                       ))}
                     </select>
@@ -627,7 +628,7 @@ const SubscriptionManagement: React.FC = () => {
                     <div>
                       <dt className="text-sm text-gray-500">Precio</dt>
                       <dd className="text-sm font-medium text-gray-900">
-                        {formatCurrency(selectedSubscription.plan.pricing.amount, selectedSubscription.plan.pricing.currency)} / {selectedSubscription.plan.pricing.interval}
+                        {formatPrice(selectedSubscription.plan.pricing.amount)} / {selectedSubscription.plan.pricing.interval}
                       </dd>
                     </div>
                   </dl>
@@ -666,8 +667,8 @@ const SubscriptionManagement: React.FC = () => {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Hoteles:</span>
-                        <span className="ml-2 font-medium">{selectedSubscription.usage.currentHotels} / {selectedSubscription.limits.maxHotels === -1 ? '∞' : selectedSubscription.limits.maxHotels}</span>
+                        <span className="text-gray-500">Empresas:</span>
+                        <span className="ml-2 font-medium">{selectedSubscription.usage.currentCompanies || selectedSubscription.usage.currentHotels} / {selectedSubscription.limits.maxCompanies === -1 ? '∞' : selectedSubscription.limits.maxCompanies}</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Usuarios:</span>

@@ -23,7 +23,9 @@ import {
   Settings as SettingsIcon,
   CreditCard as CreditCardIcon,
   Assessment as AssessmentIcon,
-  ExitToApp as ExitToAppIcon
+  ExitToApp as ExitToAppIcon,
+  Store as StoreIcon,
+  AttachMoney as AttachMoneyIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch } from '../../store';
@@ -62,9 +64,10 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ children }) => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/platform' },
     { text: 'Organizaciones', icon: <BusinessIcon />, path: '/platform/organizations' },
-    { text: 'Hoteles', icon: <HotelIcon />, path: '/platform/hotels' },
-    { text: 'Usuarios', icon: <PeopleIcon />, path: '/platform/users' },
+    { text: 'Empresas', icon: <StoreIcon />, path: '/platform/companies' },
+    { text: 'Planes y Precios', icon: <AttachMoneyIcon />, path: '/platform/pricing' },
     { text: 'Suscripciones', icon: <CreditCardIcon />, path: '/platform/subscriptions' },
+    { text: 'Usuarios', icon: <PeopleIcon />, path: '/platform/users' },
     { text: 'Reportes', icon: <AssessmentIcon />, path: '/platform/reports' },
     { text: 'Configuración', icon: <SettingsIcon />, path: '/platform/settings' }
   ];
@@ -73,7 +76,7 @@ export const PlatformLayout: React.FC<PlatformLayoutProps> = ({ children }) => {
     <div>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          QMS+Hotel
+          QMS+
         </Typography>
       </Toolbar>
       <Divider />

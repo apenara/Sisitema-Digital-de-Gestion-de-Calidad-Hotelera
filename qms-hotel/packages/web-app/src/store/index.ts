@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import type { TypedUseSelectorHook } from 'react-redux';
 import authSlice from './slices/authSlice';
 import hotelSlice from './slices/hotelSlice';
+import companySlice from './slices/companySlice';
 import uiSlice from './slices/uiSlice';
 import userSlice from './slices/userSlice';
 import platformSlice from './slices/platformSlice';
@@ -13,6 +14,7 @@ export const store = configureStore({
   reducer: {
     auth: authSlice,
     hotel: hotelSlice,
+    company: companySlice,
     ui: uiSlice,
     user: userSlice,
     platform: platformSlice,
@@ -47,6 +49,9 @@ export const store = configureStore({
           // Hotel slice
           'hotel.hotels',
           'hotel.currentHotel',
+          // Company slice
+          'company.companies',
+          'company.selectedCompany',
           // User slice
           'user.users',
           'user.currentUser'

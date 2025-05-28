@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useTenant, usePermissions } from '../context/TenantContext';
 import PlatformDashboard from '../components/platform/PlatformDashboard';
 import HotelManagement from '../components/platform/HotelManagement';
+import CompanyManagement from '../components/platform/CompanyManagement';
 import OrganizationManagement from '../components/platform/OrganizationManagement';
 import SubscriptionManagement from '../components/platform/SubscriptionManagement';
 import GlobalAnalytics from '../components/platform/GlobalAnalytics';
@@ -48,12 +49,22 @@ const PlatformRoutes: React.FC = () => {
         } 
       />
 
-      {/* Gestión de hoteles */}
+      {/* Gestión de hoteles (compatibilidad temporal) */}
       <Route 
         path="/hotels" 
         element={
           <ProtectedRoute requiredPermission="canAccessPlatform">
             <HotelManagement />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Gestión de empresas */}
+      <Route 
+        path="/companies" 
+        element={
+          <ProtectedRoute requiredPermission="canAccessPlatform">
+            <CompanyManagement />
           </ProtectedRoute>
         } 
       />
@@ -95,7 +106,7 @@ const PlatformRoutes: React.FC = () => {
           <ProtectedRoute requiredPermission="canAccessPlatform">
             <div className="p-8">
               <h1 className="text-2xl font-bold">Configuración de Plataforma</h1>
-              <p className="text-gray-600 mt-2">Configuración del sistema QMS+Hotel</p>
+              <p className="text-gray-600 mt-2">Configuración del sistema QMS+</p>
               {/* TODO: Implementar componente de configuración */}
             </div>
           </ProtectedRoute>

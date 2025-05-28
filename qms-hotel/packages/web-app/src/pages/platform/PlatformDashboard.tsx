@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Grid,
   Paper,
@@ -11,7 +11,9 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  Divider
+  Divider,
+  Button,
+  Alert
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -19,9 +21,14 @@ import {
   People as PeopleIcon,
   CreditCard as CreditCardIcon,
   TrendingUp as TrendingUpIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  Store as StoreIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store';
+import { fetchAllCompanies, selectCompanies } from '../../store/slices/companySlice';
+import { CreateTestCompany } from '../../components/platform/CreateTestCompany';
 
 interface StatCardProps {
   title: string;
@@ -70,11 +77,18 @@ interface ActivityItem {
 
 const PlatformDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const companies = useAppSelector(selectCompanies);
+  const [showCreateTest, setShowCreateTest] = React.useState(false);
+
+  useEffect(() => {
+    dispatch(fetchAllCompanies());
+  }, [dispatch]);
 
   // Datos de ejemplo - En producción estos vendrían de una API
   const stats = {
     organizations: 12,
-    hotels: 45,
+    companies: companies.length,
     activeUsers: 156,
     activeSubscriptions: 38
   };
@@ -131,11 +145,11 @@ const PlatformDashboard: React.FC = () => {
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Hoteles"
-            value={stats.hotels}
-            icon={<HotelIcon sx={{ color: '#2e7d32' }} />}
+            title="Empresas"
+            value={stats.companies}
+            icon={<StoreIcon sx={{ color: '#2e7d32' }} />}
             color="#2e7d32"
-            onClick={() => navigate('/platform/HotelsPage')}
+            onClick={() => navigate('/platform/companies')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -203,6 +217,29 @@ const PlatformDashboard: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Botón para crear empresa de prueba si no hay empresas */}
+      {companies.length === 0 && (
+        <Box mt={4}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            No hay empresas registradas en el sistema. Crea una empresa de prueba para comenzar.
+          </Alert>
+          {!showCreateTest ? (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={() => setShowCreateTest(true)}
+              fullWidth
+              sx={{ maxWidth: 600, mx: 'auto', display: 'block' }}
+            >
+              Crear Empresa de Prueba
+            </Button>
+          ) : (
+            <CreateTestCompany />
+          )}
+        </Box>
+      )}
     </Box>
   );
 };

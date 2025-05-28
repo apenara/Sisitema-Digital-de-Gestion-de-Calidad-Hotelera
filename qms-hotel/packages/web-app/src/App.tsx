@@ -19,6 +19,9 @@ import { RegisterForm } from './components/auth/RegisterForm';
 import { PlatformLayout } from './pages/platform/PlatformLayout';
 import PlatformDashboard from './pages/platform/PlatformDashboard';
 import OrganizationsPage from './pages/platform/OrganizationsPage';
+import CompanyManagement from './components/platform/CompanyManagement';
+import SubscriptionManagement from './components/platform/SubscriptionManagement';
+import { PricingPage } from './components/platform/PricingPage';
 import { ForgotPasswordForm } from './components/auth/ForgotPasswordForm';
 import { ResetPasswordForm } from './components/auth/ResetPasswordForm';
 import { AuthLayout } from './components/layout/AuthLayout';
@@ -132,9 +135,11 @@ const AppContent: React.FC = () => {
                   <PlatformLayout>
                     <Routes>
                       <Route path="organizations" element={<OrganizationsPage />} />
-                      <Route path="hotels" element={<div>Hoteles</div>} />
+                      <Route path="companies" element={<CompanyManagement />} />
+                      <Route path="hotels" element={<div>Hoteles (Deprecated)</div>} />
                       <Route path="users" element={<div>Usuarios</div>} />
-                      <Route path="subscriptions" element={<div>Suscripciones</div>} />
+                      <Route path="subscriptions" element={<SubscriptionManagement />} />
+                      <Route path="pricing" element={<PricingPage />} />
                       <Route path="reports" element={<div>Reportes</div>} />
                       <Route path="settings" element={<div>Configuración</div>} />
                     </Routes>
