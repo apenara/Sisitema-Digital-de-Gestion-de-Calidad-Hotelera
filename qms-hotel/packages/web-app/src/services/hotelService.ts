@@ -1,7 +1,30 @@
-import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  Timestamp,
+  writeBatch
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { firestoreService } from './firestoreService';
-import type { Department, CreateHotelData, UpdateHotelData, CreateDepartmentData, UpdateDepartmentData } from '../../../shared/types';
+import type {
+  Department,
+  CreateHotelData,
+  UpdateHotelData,
+  CreateDepartmentData,
+  UpdateDepartmentData,
+  Hotel,
+  CreateHotelInput,
+  UpdateHotelInput
+} from '../../../shared/types/Hotel';
 
 export interface Hotel {
   id: string;
@@ -70,13 +93,14 @@ export interface Hotel {
 }
 
 class HotelService {
-  private readonly collectionName = 'hotels';
-  private readonly HOTELS_COLLECTION = 'hotels';
+  private readonly hotelsCollection = 'hotels';
+  private readonly hotelUsersCollection = 'hotel_users';
+  private readonly hotelDocumentsCollection = 'hotel_documents';
   private readonly DEPARTMENTS_COLLECTION = 'departments';
 
   async getAll(): Promise<Hotel[]> {
     try {
-      const querySnapshot = await getDocs(collection(db, this.collectionName));
+      const querySnapshot = await getDocs(collection(db, this.hotelsCollection));
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -89,7 +113,7 @@ class HotelService {
 
   async getById(id: string): Promise<Hotel | null> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(db, this.hotelsCollection, id);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
@@ -109,7 +133,7 @@ class HotelService {
   async getByOrganization(organizationId: string): Promise<Hotel[]> {
     try {
       const q = query(
-        collection(db, this.collectionName),
+        collection(db, this.hotelsCollection),
         where('organizationId', '==', organizationId)
       );
       
@@ -133,7 +157,7 @@ class HotelService {
         updatedAt: now
       };
 
-      const docRef = await addDoc(collection(db, this.collectionName), newData);
+      const docRef = await addDoc(collection(db, this.hotelsCollection), newData);
       return {
         id: docRef.id,
         ...newData
@@ -146,7 +170,7 @@ class HotelService {
 
   async update(id: string, data: Partial<Omit<Hotel, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(db, this.hotelsCollection, id);
       const updateData = {
         ...data,
         updatedAt: new Date().toISOString()
@@ -161,7 +185,7 @@ class HotelService {
 
   async delete(id: string): Promise<void> {
     try {
-      const docRef = doc(db, this.collectionName, id);
+      const docRef = doc(db, this.hotelsCollection, id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error al eliminar hotel:', error);
@@ -172,7 +196,7 @@ class HotelService {
   async getByStatus(status: Hotel['status']): Promise<Hotel[]> {
     try {
       const q = query(
-        collection(db, this.collectionName),
+        collection(db, this.hotelsCollection),
         where('status', '==', status)
       );
       
@@ -190,7 +214,7 @@ class HotelService {
   async getByCity(city: string): Promise<Hotel[]> {
     try {
       const q = query(
-        collection(db, this.collectionName),
+        collection(db, this.hotelsCollection),
         where('address.city', '==', city)
       );
       
@@ -205,131 +229,278 @@ class HotelService {
     }
   }
 
-  /**
-   * Crear un nuevo hotel
-   */
-  async createHotel(data: CreateHotelData, ownerId: string): Promise<string> {
+  async createHotel(data: CreateHotelInput, createdBy: string): Promise<Hotel> {
     try {
       const hotelData = {
         ...data,
-        departments: [],
-        isActive: true,
         status: 'active' as const,
-        subscriptionPlan: 'basic' as const,
-        subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días
-        ownerId,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        settings: {
-          timezone: 'America/Bogota',
-          currency: 'COP',
-          language: 'es' as const,
-          theme: {
-            primaryColor: '#006A6B',
-            secondaryColor: '#4A6363'
-          },
-          branding: {
-            theme: {
-              primaryColor: '#006A6B',
-              secondaryColor: '#4A6363'
-            }
-          },
-          features: {
-            documentsEnabled: true,
-            nonConformitiesEnabled: true,
-            auditsEnabled: true,
-            reportsEnabled: true,
-            analyticsEnabled: true,
-            notificationsEnabled: true
-          },
-          notifications: {
-            emailAlerts: true,
-            pushNotifications: true
-          },
-          quality: {
-            defaultProcesses: [],
-            auditFrequency: 'monthly' as const,
-            complianceStandards: [],
-            qualityObjectives: []
-          },
-          integrations: {},
-          ...data.settings
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        createdBy,
+        statistics: {
+          totalUsers: 0,
+          activeUsers: 0,
+          totalDocuments: 0,
+          qualityScore: 0
         }
       };
 
-      const hotelId = await firestoreService.create<Hotel>(this.HOTELS_COLLECTION, hotelData);
+      const docRef = await addDoc(collection(db, this.hotelsCollection), hotelData);
+      const docSnap = await getDoc(docRef);
 
-      // Crear departamentos iniciales
-      if (data.departments && data.departments.length > 0) {
-        for (const deptData of data.departments) {
-          await this.createDepartment(hotelId, {
-            ...deptData,
-            processes: deptData.processes || []
-          });
-        }
+      return {
+        id: docSnap.id,
+        ...docSnap.data(),
+        createdAt: docSnap.data()?.createdAt?.toDate(),
+        updatedAt: docSnap.data()?.updatedAt?.toDate()
+      } as Hotel;
+    } catch (error) {
+      console.error('Error creando hotel:', error);
+      throw error;
+    }
+  }
+
+  async getHotel(id: string): Promise<Hotel> {
+    try {
+      const docRef = doc(db, this.hotelsCollection, id);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        throw new Error('Hotel no encontrado');
       }
 
-      return hotelId;
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate(),
+        updatedAt: data.updatedAt?.toDate()
+      } as Hotel;
     } catch (error) {
-      console.error('Error creating hotel:', error);
+      console.error('Error obteniendo hotel:', error);
       throw error;
     }
   }
 
-  /**
-   * Obtener hotel por ID
-   */
-  async getHotelById(hotelId: string): Promise<Hotel | null> {
+  async updateHotel(id: string, updates: UpdateHotelInput): Promise<Hotel> {
     try {
-      const hotel = await firestoreService.getById<Hotel>(this.HOTELS_COLLECTION, hotelId);
-      
-      if (hotel) {
-        // Cargar departamentos
-        const departments = await this.getDepartmentsByHotel(hotelId);
-        hotel.departments = departments;
+      const docRef = doc(db, this.hotelsCollection, id);
+      const updateData = {
+        ...updates,
+        updatedAt: Timestamp.now()
+      };
+
+      await updateDoc(docRef, updateData);
+      return await this.getHotel(id);
+    } catch (error) {
+      console.error('Error actualizando hotel:', error);
+      throw error;
+    }
+  }
+
+  async deleteHotel(id: string): Promise<void> {
+    try {
+      // Verificar que no tenga usuarios activos
+      const usersSnap = await getDocs(
+        query(
+          collection(db, this.hotelUsersCollection),
+          where('hotelId', '==', id),
+          where('status', '==', 'active')
+        )
+      );
+
+      if (!usersSnap.empty) {
+        throw new Error('No se puede eliminar el hotel: tiene usuarios activos');
       }
 
-      return hotel;
+      const batch = writeBatch(db);
+
+      // Eliminar hotel
+      const hotelRef = doc(db, this.hotelsCollection, id);
+      batch.delete(hotelRef);
+
+      // Eliminar usuarios del hotel
+      const usersQuery = query(
+        collection(db, this.hotelUsersCollection),
+        where('hotelId', '==', id)
+      );
+      const usersSnapshot = await getDocs(usersQuery);
+      usersSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Eliminar documentos del hotel
+      const documentsQuery = query(
+        collection(db, this.hotelDocumentsCollection),
+        where('hotelId', '==', id)
+      );
+      const documentsSnapshot = await getDocs(documentsQuery);
+      documentsSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
     } catch (error) {
-      console.error('Error getting hotel:', error);
+      console.error('Error eliminando hotel:', error);
       throw error;
     }
   }
 
-  /**
-   * Actualizar hotel
-   */
-  async updateHotel(hotelId: string, data: UpdateHotelData): Promise<void> {
+  async getHotels(limitCount: number = 50): Promise<Hotel[]> {
     try {
-      await firestoreService.update(this.HOTELS_COLLECTION, hotelId, data as any);
+      const q = query(
+        collection(db, this.hotelsCollection),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+
+      const querySnap = await getDocs(q);
+      return querySnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate()
+      })) as Hotel[];
     } catch (error) {
-      console.error('Error updating hotel:', error);
+      console.error('Error obteniendo hoteles:', error);
       throw error;
     }
   }
 
-  /**
-   * Obtener hoteles por propietario
-   */
-  async getHotelsByOwner(ownerId: string): Promise<Hotel[]> {
+  async getHotelsByOrganization(organizationId: string): Promise<Hotel[]> {
     try {
-      return await firestoreService.getMany<Hotel>(this.HOTELS_COLLECTION, {
-        filters: [
-          { field: 'ownerId', operator: '==', value: ownerId },
-          { field: 'isActive', operator: '==', value: true }
-        ],
-        orderByField: 'name',
-        orderDirection: 'asc'
+      const q = query(
+        collection(db, this.hotelsCollection),
+        where('organizationId', '==', organizationId),
+        orderBy('createdAt', 'desc')
+      );
+
+      const querySnap = await getDocs(q);
+      return querySnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate()
+      })) as Hotel[];
+    } catch (error) {
+      console.error('Error obteniendo hoteles de la organización:', error);
+      throw error;
+    }
+  }
+
+  async searchHotels(searchQuery: string): Promise<Hotel[]> {
+    try {
+      const q = query(
+        collection(db, this.hotelsCollection),
+        orderBy('name'),
+        limit(50)
+      );
+
+      const querySnap = await getDocs(q);
+      const allHotels = querySnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate()
+      })) as Hotel[];
+
+      return allHotels.filter(hotel =>
+        hotel.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        hotel.address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        hotel.address.country.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    } catch (error) {
+      console.error('Error buscando hoteles:', error);
+      throw error;
+    }
+  }
+
+  async addUserToHotel(
+    hotelId: string,
+    userId: string,
+    role: 'hotel_admin' | 'hotel_manager' | 'hotel_staff',
+    addedBy: string
+  ): Promise<void> {
+    try {
+      const userData = {
+        hotelId,
+        userId,
+        role,
+        addedAt: Timestamp.now(),
+        addedBy,
+        status: 'active'
+      };
+
+      await addDoc(collection(db, this.hotelUsersCollection), userData);
+
+      // Actualizar estadísticas del hotel
+      const hotelRef = doc(db, this.hotelsCollection, hotelId);
+      const hotelSnap = await getDoc(hotelRef);
+      const hotelData = hotelSnap.data();
+
+      await updateDoc(hotelRef, {
+        'statistics.totalUsers': (hotelData?.statistics?.totalUsers || 0) + 1,
+        'statistics.activeUsers': (hotelData?.statistics?.activeUsers || 0) + 1,
+        updatedAt: Timestamp.now()
       });
     } catch (error) {
-      console.error('Error getting hotels by owner:', error);
+      console.error('Error agregando usuario al hotel:', error);
       throw error;
     }
   }
 
-  /**
-   * Crear departamento
-   */
+  async removeUserFromHotel(hotelId: string, userId: string): Promise<void> {
+    try {
+      const q = query(
+        collection(db, this.hotelUsersCollection),
+        where('hotelId', '==', hotelId),
+        where('userId', '==', userId)
+      );
+
+      const querySnap = await getDocs(q);
+      const batch = writeBatch(db);
+
+      querySnap.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+
+      // Actualizar estadísticas del hotel
+      const hotelRef = doc(db, this.hotelsCollection, hotelId);
+      const hotelSnap = await getDoc(hotelRef);
+      const hotelData = hotelSnap.data();
+
+      await updateDoc(hotelRef, {
+        'statistics.totalUsers': Math.max(0, (hotelData?.statistics?.totalUsers || 0) - 1),
+        'statistics.activeUsers': Math.max(0, (hotelData?.statistics?.activeUsers || 0) - 1),
+        updatedAt: Timestamp.now()
+      });
+
+      await batch.commit();
+    } catch (error) {
+      console.error('Error removiendo usuario del hotel:', error);
+      throw error;
+    }
+  }
+
+  async getHotelMetrics(hotelId: string): Promise<{
+    totalUsers: number;
+    activeUsers: number;
+    totalDocuments: number;
+    qualityScore: number;
+    lastActivity: Date;
+  }> {
+    try {
+      const hotel = await this.getHotel(hotelId);
+      return {
+        ...hotel.statistics,
+        lastActivity: hotel.updatedAt
+      };
+    } catch (error) {
+      console.error('Error obteniendo métricas del hotel:', error);
+      throw error;
+    }
+  }
+
   async createDepartment(hotelId: string, data: CreateDepartmentData): Promise<string> {
     try {
       const departmentData: Omit<Department, 'id'> = {
@@ -341,7 +512,7 @@ class HotelService {
       };
 
       const departmentId = await firestoreService.create<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         departmentData
       );
 
@@ -352,13 +523,10 @@ class HotelService {
     }
   }
 
-  /**
-   * Obtener departamento por ID
-   */
   async getDepartmentById(hotelId: string, departmentId: string): Promise<Department | null> {
     try {
       return await firestoreService.getById<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         departmentId
       );
     } catch (error) {
@@ -367,13 +535,10 @@ class HotelService {
     }
   }
 
-  /**
-   * Actualizar departamento
-   */
   async updateDepartment(hotelId: string, departmentId: string, data: UpdateDepartmentData): Promise<void> {
     try {
       await firestoreService.update<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         departmentId,
         data
       );
@@ -383,13 +548,10 @@ class HotelService {
     }
   }
 
-  /**
-   * Eliminar departamento
-   */
   async deleteDepartment(hotelId: string, departmentId: string): Promise<void> {
     try {
       await firestoreService.update<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         departmentId,
         { isActive: false }
       );
@@ -399,13 +561,10 @@ class HotelService {
     }
   }
 
-  /**
-   * Obtener departamentos de un hotel
-   */
   async getDepartmentsByHotel(hotelId: string): Promise<Department[]> {
     try {
       return await firestoreService.getMany<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         {
           filters: [
             { field: 'isActive', operator: '==', value: true }
@@ -420,13 +579,10 @@ class HotelService {
     }
   }
 
-  /**
-   * Obtener departamentos activos de un hotel
-   */
   async getActiveDepartments(hotelId: string): Promise<Department[]> {
     try {
       return await firestoreService.getMany<Department>(
-        `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+        `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
         {
           filters: [
             { field: 'isActive', operator: '==', value: true }
@@ -441,9 +597,6 @@ class HotelService {
     }
   }
 
-  /**
-   * Buscar departamentos por nombre
-   */
   async searchDepartments(hotelId: string, searchTerm: string): Promise<Department[]> {
     try {
       const departments = await this.getDepartmentsByHotel(hotelId);
@@ -457,12 +610,9 @@ class HotelService {
     }
   }
 
-  /**
-   * Verificar si un hotel está activo
-   */
   async isHotelActive(hotelId: string): Promise<boolean> {
     try {
-      const hotel = await this.getHotelById(hotelId);
+      const hotel = await this.getHotel(hotelId);
       return hotel?.isActive || false;
     } catch (error) {
       console.error('Error checking hotel status:', error);
@@ -470,12 +620,9 @@ class HotelService {
     }
   }
 
-  /**
-   * Verificar si la suscripción del hotel está vigente
-   */
   async isSubscriptionActive(hotelId: string): Promise<boolean> {
     try {
-      const hotel = await this.getHotelById(hotelId);
+      const hotel = await this.getHotel(hotelId);
       if (!hotel) return false;
       
       return hotel.subscriptionId ? true : false; // TODO: verificar subscripción real
@@ -485,19 +632,13 @@ class HotelService {
     }
   }
 
-  /**
-   * Suscribirse a cambios del hotel
-   */
   subscribeToHotel(hotelId: string, callback: (hotel: Hotel | null) => void): () => void {
-    return firestoreService.subscribeToDocument<Hotel>(this.HOTELS_COLLECTION, hotelId, callback);
+    return firestoreService.subscribeToDocument<Hotel>(this.hotelsCollection, hotelId, callback);
   }
 
-  /**
-   * Suscribirse a cambios de departamentos
-   */
   subscribeToDepartments(hotelId: string, callback: (departments: Department[]) => void): () => void {
     return firestoreService.subscribeToCollection<Department>(
-      `${this.HOTELS_COLLECTION}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
+      `${this.hotelsCollection}/${hotelId}/${this.DEPARTMENTS_COLLECTION}`,
       callback,
       {
         filters: [

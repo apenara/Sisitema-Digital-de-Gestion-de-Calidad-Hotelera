@@ -60,6 +60,8 @@ export interface Hotel {
   
   // Estadísticas básicas (calculadas)
   statistics?: HotelStatistics;
+  
+  createdBy: string;
 }
 
 export interface HotelSettings {
@@ -412,3 +414,7 @@ export const DEFAULT_HOTEL_DEPARTMENTS: Omit<Department, 'id' | 'createdAt' | 'u
     isActive: true
   }
 ];
+
+export type CreateHotelInput = Omit<Hotel, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'statistics'>;
+
+export type UpdateHotelInput = Partial<CreateHotelInput>;

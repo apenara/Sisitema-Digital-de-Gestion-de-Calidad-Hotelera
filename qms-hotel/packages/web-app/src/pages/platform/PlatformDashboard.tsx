@@ -135,7 +135,7 @@ const PlatformDashboard: React.FC = () => {
             value={stats.hotels}
             icon={<HotelIcon sx={{ color: '#2e7d32' }} />}
             color="#2e7d32"
-            onClick={() => navigate('/platform/hotels')}
+            onClick={() => navigate('/platform/HotelsPage')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
