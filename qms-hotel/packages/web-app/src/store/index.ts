@@ -9,12 +9,14 @@ import userSlice from './slices/userSlice';
 import platformSlice from './slices/platformSlice';
 import organizationSlice from './slices/organizationSlice';
 import subscriptionSlice from './slices/subscriptionSlice';
+import documentSlice from './slices/documentSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authSlice,
     hotel: hotelSlice,
     company: companySlice,
+    documents: documentSlice,
     ui: uiSlice,
     user: userSlice,
     platform: platformSlice,
@@ -52,6 +54,12 @@ export const store = configureStore({
           // Company slice
           'company.companies',
           'company.selectedCompany',
+          // Documents slice
+          'documents.documents',
+          'documents.selectedDocument',
+          'documents.searchResult',
+          'documents.moduleStats',
+          'documents.versions',
           // User slice
           'user.users',
           'user.currentUser'
