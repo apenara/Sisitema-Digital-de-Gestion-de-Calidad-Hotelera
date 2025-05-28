@@ -45,6 +45,18 @@ export interface UserRoleConfig {
   departmentAccess?: string[];
 }
 
+export interface UserSecurity {
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string | null;
+  failedLoginAttempts: number;
+  lastFailedLogin: Date | null;
+  accountLocked: boolean;
+  accountLockedUntil: Date | null;
+  lastLoginAt: Date;
+  lastLoginIP: string | null;
+  lastLoginDevice: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -80,6 +92,9 @@ export interface User {
   
   // Contexto de acceso (calculado dinámicamente)
   accessContext?: UserAccessContext;
+
+  // Seguridad
+  security?: UserSecurity;
 }
 
 export interface UserAccessContext {

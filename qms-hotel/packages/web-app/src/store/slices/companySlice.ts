@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
 import type { Company } from '../../../../shared/types/Company';
 import { companyService, type CreateCompanyInput } from '../../services/companyService';

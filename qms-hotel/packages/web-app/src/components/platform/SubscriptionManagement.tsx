@@ -29,11 +29,11 @@ import {
 } from '../../store/slices/organizationSlice';
 import type { Subscription, SubscriptionPlan, CreateSubscriptionInput } from '../../../../shared/types/Subscription';
 import { 
-  SUBSCRIPTION_PLANS, 
-  calculatePrice, 
+  SUBSCRIPTION_PLANS,  
+  calculatePlanPrice,
   formatPrice,
   type BillingCycle,
-} from '../../../../shared/types/SubscriptionPlan';
+} from '../../../../shared/types/SubscriptionPlan'; 
 
 interface SubscriptionFormData {
   organizationId?: string;

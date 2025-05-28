@@ -6,7 +6,7 @@ import {
   CardActions,
   Typography,
   Button,
-  Grid,
+  Grid as MuiGrid,
   Chip,
   List,
   ListItem,
@@ -25,13 +25,9 @@ import {
   Business as BusinessIcon,
   RocketLaunch as RocketLaunchIcon,
 } from '@mui/icons-material';
-import { 
-  SUBSCRIPTION_PLANS, 
-  calculatePrice, 
-  formatPrice,
-  recommendPlan,
-  type BillingCycle,
-} from '@shared/types/SubscriptionPlan';
+import { calculatePlanPrice, SUBSCRIPTION_PLANS, getRecommendedPlan, formatPrice } from '../../../../shared/types/SubscriptionPlan';
+import type { BillingCycle } from '../../../../shared/types/SubscriptionPlan';
+
 
 interface PricingPageProps {
   currentPlanId?: string;
@@ -59,7 +55,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
   onSelectPlan,
 }) => {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-  const recommendedPlan = companySize ? recommendPlan(companySize).id : null;
+  const recommendedPlan = companySize ? getRecommendedPlan(companySize, 'hotel', 'small') : null;
 
   const handleBillingCycleChange = (
     _: React.MouseEvent<HTMLElement>,
@@ -86,10 +82,10 @@ export const PricingPage: React.FC<PricingPageProps> = ({
       features.push(`${plan.limits.maxStorageGB} GB de almacenamiento`);
     }
 
-    if (plan.limits.maxDepartments === -1) {
-      features.push('Departamentos ilimitados');
+    if (plan.limits.maxCompanies === -1) {
+      features.push('Empresas ilimitadas');
     } else {
-      features.push(`Hasta ${plan.limits.maxDepartments} departamentos`);
+      features.push(`Hasta ${plan.limits.maxCompanies} empresas`);
     }
 
     if (plan.limits.maxProcesses === -1) {
@@ -98,7 +94,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({
       features.push(`Hasta ${plan.limits.maxProcesses} procesos`);
     }
 
-    features.push(...plan.features);
+    features.push(...Object.keys(plan.features));
 
     return features;
   };
@@ -128,15 +124,15 @@ export const PricingPage: React.FC<PricingPageProps> = ({
         </ToggleButtonGroup>
       </Box>
 
-      <Grid container spacing={3} alignItems="stretch">
+      <div className="grid-container">
         {Object.entries(SUBSCRIPTION_PLANS).map(([planId, plan]) => {
-          const price = calculatePrice(plan.pricing, billingCycle);
+          const price = calculatePlanPrice(plan, billingCycle);
           const isCurrentPlan = currentPlanId === planId;
           const isRecommended = recommendedPlan === planId;
           const isEnterprise = planId === 'enterprise';
 
           return (
-            <Grid item xs={12} sm={6} md={3} key={planId}>
+            <div className="grid-item" style={{ gridColumn: 'span 3' }} key={planId}>
               <Card
                 sx={{
                   height: '100%',
@@ -250,10 +246,10 @@ export const PricingPage: React.FC<PricingPageProps> = ({
                   </Button>
                 </CardActions>
               </Card>
-            </Grid>
+            </div>
           );
         })}
-      </Grid>
+      </div>
 
       <Box mt={6} textAlign="center">
         <Typography variant="h6" gutterBottom>

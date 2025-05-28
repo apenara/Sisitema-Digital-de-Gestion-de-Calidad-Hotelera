@@ -22,7 +22,17 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     login: (state, action: PayloadAction<User>) => {
-      state.user = action.payload;
+      // Convertir Timestamp a Date si existe
+      const user = {
+        ...action.payload,
+        security: action.payload.security ? {
+          ...action.payload.security,
+          lastLoginAt: action.payload.security.lastLoginAt instanceof Date 
+            ? action.payload.security.lastLoginAt 
+            : new Date(action.payload.security.lastLoginAt.seconds * 1000)
+        } : undefined
+      };
+      state.user = user;
       state.isLoading = false;
       state.error = null;
       state.requiresTwoFactor = false;

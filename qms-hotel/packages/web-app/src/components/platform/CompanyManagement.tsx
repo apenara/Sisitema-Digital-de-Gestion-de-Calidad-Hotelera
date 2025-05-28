@@ -12,9 +12,11 @@ import {
   loadOrganizations,
   selectOrganizations
 } from '../../store/slices/organizationSlice';
-import type { Company, IndustryType } from '../../../../shared/types/Company';
+import type { Company, IndustryType, UpdateCompanyData } from '../../../../shared/types/Company';
 import { getAllIndustries, getIndustryLabel, getIndustryIcon, getIndustryColor } from '../../../../shared/types/Industry';
 import type { CreateCompanyInput } from '../../services/companyService';
+
+type EmployeeRange = '1-10' | '11-50' | '51-200' | '201-500' | '501-1000' | '1001-5000' | '5000+';
 
 interface CompanyFormData {
   name: string;
@@ -36,7 +38,7 @@ interface CompanyFormData {
   industry: {
     type: IndustryType;
     size: 'micro' | 'small' | 'medium' | 'large' | 'enterprise';
-    employeeCount?: string;
+    employeeCount?: EmployeeRange;
     certifications?: string[];
   };
 }
@@ -117,7 +119,7 @@ const CompanyManagement: React.FC = () => {
         contact: {
           email: formData.contact.email,
           phone: formData.contact.phone,
-          address: `${formData.address.street}, ${formData.address.city}, ${formData.address.state} ${formData.address.postalCode}, ${formData.address.country}`,
+          // address: `${formData.address.street}, ${formData.address.city}, ${formData.address.state} ${formData.address.postalCode}, ${formData.address.country}`,
           website: formData.contact.website
         },
         settings: {
@@ -157,7 +159,7 @@ const CompanyManagement: React.FC = () => {
       
       await dispatch(updateCompany({
         companyId: selectedCompany.id,
-        data: updateData
+        data: updateData as Partial<Company>
       })).unwrap();
       
       setIsEditModalOpen(false);
@@ -188,10 +190,7 @@ const CompanyManagement: React.FC = () => {
       description: company.description || '',
       organizationId: company.organizationId || '',
       type: company.type,
-      address: {
-        ...company.address,
-        postalCode: company.address.postalCode
-      },
+      address: company.address,
       contact: {
         ...company.contact,
         website: company.contact.website || ''
@@ -425,7 +424,7 @@ const CompanyManagement: React.FC = () => {
                         </div>
                         <p className="mt-1 text-sm text-gray-600">{company.description}</p>
                         <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                          <span>{company.address.city}, {company.address.country}</span>
+                          {/* <span>{company.address.city}, {company.address.country}</span> */}
                           <span>•</span>
                           <span>{company.contact.email}</span>
                           <span>•</span>
@@ -565,7 +564,7 @@ const CompanyManagement: React.FC = () => {
                       value={formData.industry.employeeCount || ''}
                       onChange={(e) => setFormData({
                         ...formData,
-                        industry: { ...formData.industry, employeeCount: e.target.value }
+                        industry: { ...formData.industry, employeeCount: e.target.value as EmployeeRange }
                       })}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     >

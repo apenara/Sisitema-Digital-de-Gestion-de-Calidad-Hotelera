@@ -1,3 +1,5 @@
+export type BillingCycle = 'monthly' | 'yearly';
+
 export interface SubscriptionPlan {
   id: string;
   name: string;
@@ -454,18 +456,18 @@ export const SUBSCRIPTION_PLANS: Record<string, Omit<SubscriptionPlan, 'id' | 'c
 };
 
 // Funciones auxiliares
-export function calculatePlanPrice(plan: SubscriptionPlan, billingCycle: 'monthly' | 'yearly', users?: number): number {
-  const basePrice = billingCycle === 'yearly' ? plan.pricing.yearly : plan.pricing.monthly;
+export function calculatePlanPrice(plan: Partial<SubscriptionPlan>, billingCycle: 'monthly' | 'yearly', users?: number): number {
+  const basePrice = billingCycle === 'yearly' ? plan.pricing?.yearly || 0 : plan.pricing?.monthly || 0;
   
   // Para planes enterprise con precio personalizado
-  if (plan.config.customPricing && basePrice === 0) {
+  if (plan.config?.customPricing && basePrice === 0) {
     return 0; // Requiere cotización
   }
   
   // Algunos planes pueden tener precio por usuario adicional
-  if (users && users > plan.limits.maxUsers && plan.limits.maxUsers !== -1) {
+  if (users && users > (plan.limits?.maxUsers || 0) && plan.limits?.maxUsers !== -1) {
     // Lógica para usuarios adicionales
-    const extraUsers = users - plan.limits.maxUsers;
+    const extraUsers = users - (plan.limits?.maxUsers || 0);
     const pricePerExtraUser = billingCycle === 'yearly' ? 10 * 12 : 10; // $10/mes por usuario extra
     return basePrice + (extraUsers * pricePerExtraUser);
   }
@@ -597,4 +599,11 @@ export interface SubscriptionPlanSummary {
   yearlyPrice: number;
   isPopular: boolean;
   maxUsers: number | 'unlimited';
+}
+
+export function formatPrice(amount: number): string {
+  return new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'COP'
+  }).format(amount);
 }
